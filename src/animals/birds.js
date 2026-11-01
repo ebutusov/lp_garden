@@ -94,8 +94,8 @@ const perchWorld = (perch, out) => {
     perch.high = perchWorld(perch, tmp).y > BIRD_HIGH;
     perches.push(perch);
   };
-  for (const l of lanterns) addPerch(l, 0, 3.1, 0);                 // roof tip
-  for (const tr of trees) {
+  for (const l of lanterns.list) addPerch(l.group, 0, 3.1, 0);                 // roof tip
+  for (const tr of trees.list) {
     const kids = tr.crown.children;
     if (kids[0].geometry.type === 'ConeGeometry') {                 // pine: the top cone's tip
       const top = kids.reduce((a, b) => (a.position.y > b.position.y ? a : b));
@@ -107,7 +107,7 @@ const perchWorld = (perch, out) => {
       }
     }
   }
-  for (const x of [-5.5, -2.75, 0, 2.75, 5.5]) addPerch(torii, x, 7.65, 0);            // top beam
+  for (const x of [-5.5, -2.75, 0, 2.75, 5.5]) addPerch(torii.group, x, 7.65, 0);            // top beam
   addPerch(teaHouse.group, 0, teaHouse.floorY + 2.8 + 0.8 + 2.6, 0);                    // roof peak
   const gapA = Math.asin(FENCE_GAP / FENCE_R);
   for (let i = 0; i < 10; i++) {                                                        // top fence rail

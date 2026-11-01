@@ -43,7 +43,17 @@ Testing gotchas:
 
 ## Architecture
 
-Each module builds its meshes when it's first imported and exports an `update*(dt, t)` function where it animates. `animate()` in `src/main.js` calls every update in order, then `composer.render()`.
+Each module builds its meshes when it's first imported. World features expose an `update(dt, t)` method (see below); the effects, animals and player modules export `update*(dt, t)` functions. `animate()` in `src/main.js` calls every update in order, then `composer.render()`.
+
+### World features are classes
+
+Every file in `src/world/` defines a class that extends `Feature` (`src/world/feature.js`), and exports one instance of it, created on import: `export const pond = new Pond();`.
+
+- **Composition:** a feature owns `this.group`, a `THREE.Group` it adds to the scene (or to a parent feature's group), rather than extending `THREE.Group`. Use `torii.group`, `teaHouse.group` and so on wherever an `Object3D` is needed.
+- **`update(dt, t)`:** called from `animate()`, each in its fixed slot. The base version does nothing, so static features don't define one.
+- **Helpers:** use them instead of repeating the boilerplate. `this.mesh(geo, mat, x, y, z, { cast, receive, parent })` makes a mesh and adds it to the group; the shadow flags default to `false`. `solidCircle`, `solidBox` and `platform` take local coordinates and register colliders in world coordinates. Boxes only work for groups that aren't rotated.
+- **Collections:** trees and lanterns are made of smaller objects. `trees.list` holds `Tree` objects (`PineTree`, `MapleTree` and `CherryTree`), each with its own `crown` and `sway()`. `lanterns.list` holds `Lantern` objects, whose shared night brightness is the static `Lantern.brightness`.
+- **Renamed APIs:** use `ripples.spawn(lx, lz, size, life)` to make a ripple, `pond.group` for the pond-local frame, and `teaHouse.contains(x, z)` / `zenGarden.contains(x, z)` to test whether a point is inside.
 
 | Folder | Contents |
 |---|---|
@@ -57,7 +67,7 @@ Each module builds its meshes when it's first imported and exports an `update*(d
 ### Module rules
 
 - **Import order is load order.** `main.js` imports modules in a deliberate order, which matters for two reasons:
-  - **Layout:** the modules that call `rand()` at load time must run in the order ground (mounds) → trees → pond (lily pads) → koi → stepping stones → zen garden → rocks → flowers. A core or shared module must never import any of them, or the seeded sequence shifts and the whole layout changes. Check `garden.fingerprint()` after reshuffling imports.
+  - **Layout:** the modules that call `rand()` at load time must run in the order ground (mounds) → trees → pond (lily pads) → koi → stepping stones → zen garden → rocks → flowers. A core or shared module must never import any of them, or the seeded sequence shifts and the whole layout changes. Check `garden.fingerprint()` after reshuffling imports. Inside a constructor, keep the order of the `rand()` calls too.
   - **Spawning:** every world module that adds `solids` must load before the animal modules, because animals pick their starting spots by avoiding `solids`.
 - **Shared mutable state** lives in objects, because importers can't assign to an exported `let`. Day/night is `env.isNight` and `env.nightMix` (0 to 1); anything with a night look reads `env.nightMix`. The player's `yaw`, `pitch`, `flyMode`, `verticalVel` and `onGround` live on `player`. Both are in `src/core/state.js`.
 - **Avoid import cycles.** `updateBirds(dt, t, cats)` takes the cats as an argument because `cats.js` imports `birds.js`.

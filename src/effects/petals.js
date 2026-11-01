@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { scene } from '../core/scene.js';
 import { dotTex } from '../core/textures.js';
 import { POND_Z, WATER_LEVEL, WIND_DIR, windStrength, inPond } from '../core/layout.js';
-import { cherryCrowns } from '../world/trees.js';
-import { spawnRipple } from '../world/ripples.js';
+import { trees } from '../world/trees.js';
+import { ripples } from '../world/ripples.js';
 
 // ---- Falling cherry petals ----
 // Petals drop from the cherry crowns and drift with the wind.
@@ -19,8 +19,9 @@ const petalData = [];
 // Recycle a petal that reached the ground: put it back up in a random cherry crown.
 // (anyHeight scatters the very first batch at all heights so the air isn't empty at start.)
 function respawnPetal(i, anyHeight = false) {
-  if (!cherryCrowns.length) { petalPos[i * 3 + 1] = -100; return; }
-  const c = cherryCrowns[Math.floor(Math.random() * cherryCrowns.length)];
+  const crowns = trees.cherryCrowns;
+  if (!crowns.length) { petalPos[i * 3 + 1] = -100; return; }
+  const c = crowns[Math.floor(Math.random() * crowns.length)];
   const a = Math.random() * Math.PI * 2, r = Math.random() * c.r;
   petalPos[i * 3] = c.x + Math.cos(a) * r;
   petalPos[i * 3 + 1] = anyHeight ? Math.random() * c.y : c.y + (Math.random() - 0.3) * c.r * 0.6;
@@ -61,7 +62,7 @@ export function updatePetals(dt, t) {
     const x = petalPos[i * 3], z = petalPos[i * 3 + 2];
     const wet = inPond(x, z);
     if (petalPos[i * 3 + 1] < (wet ? WATER_LEVEL : 0.02)) {
-      if (wet && Math.random() < 0.3) spawnRipple(x, z - POND_Z, 0.35, 1);
+      if (wet && Math.random() < 0.3) ripples.spawn(x, z - POND_Z, 0.35, 1);
       respawnPetal(i);
     }
   }

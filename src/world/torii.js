@@ -1,28 +1,21 @@
 import * as THREE from 'three';
-import { scene } from '../core/scene.js';
 import { M } from '../core/materials.js';
 import { TORII_Z } from '../core/layout.js';
-import { addCircleSolid } from '../core/physics.js';
+import { Feature } from './feature.js';
 
 // ---- Torii gate (entrance) ----
-function makeTorii() {
-  const g = new THREE.Group();
-  // One geometry, two meshes: geometry data is uploaded to the GPU once and drawn twice.
-  const postGeo = new THREE.CylinderGeometry(0.5, 0.6, 7, 10);
-  const pL = new THREE.Mesh(postGeo, M.maple), pR = new THREE.Mesh(postGeo, M.maple);
-  pL.position.set(-5, 3.5, 0); pR.position.set(5, 3.5, 0);
-  pL.castShadow = pR.castShadow = true;
-  g.add(pL, pR);
-  // top beam (shi)
-  const top = new THREE.Mesh(new THREE.BoxGeometry(13, 0.9, 1.2), M.maple);
-  top.position.y = 7.2; top.castShadow = true;
-  const top2 = new THREE.Mesh(new THREE.BoxGeometry(12.2, 0.6, 0.9), M.maple);
-  top2.position.y = 6.1;
-  g.add(top, top2);
-  return g;
+class Torii extends Feature {
+  constructor() {
+    super(0, TORII_Z);
+    // One geometry, two meshes: geometry data is uploaded to the GPU once and drawn twice.
+    const postGeo = new THREE.CylinderGeometry(0.5, 0.6, 7, 10);
+    for (const x of [-5, 5]) {
+      this.mesh(postGeo, M.maple, x, 3.5, 0, { cast: true });
+      this.solidCircle(x, 0, 0.65, 8);
+    }
+    // top beam (shi)
+    this.mesh(new THREE.BoxGeometry(13, 0.9, 1.2), M.maple, 0, 7.2, 0, { cast: true });
+    this.mesh(new THREE.BoxGeometry(12.2, 0.6, 0.9), M.maple, 0, 6.1, 0);
+  }
 }
-export const torii = makeTorii();
-torii.position.set(0, 0, TORII_Z);
-scene.add(torii);
-addCircleSolid(-5, TORII_Z, 0.65, 8);
-addCircleSolid(5, TORII_Z, 0.65, 8);
+export const torii = new Torii();

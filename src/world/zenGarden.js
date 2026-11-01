@@ -1,10 +1,9 @@
 import * as THREE from 'three';
-import { scene } from '../core/scene.js';
 import { M } from '../core/materials.js';
 import { rand } from '../core/random.js';
 import { renderer } from '../core/renderer.js';
 import { ZEN } from '../core/layout.js';
-import { addCircleSolid, platforms } from '../core/physics.js';
+import { Feature } from './feature.js';
 
 // ---- Zen gravel garden (karesansui) ----
 // Rock groups set in gravel raked into straight lines, with rings around each group.
@@ -49,54 +48,46 @@ function makeRakedTexture() {
   tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
   return tex;
 }
-function buildZenGarden() {
-  const g = new THREE.Group();
-  g.position.set(ZEN.x, 0, ZEN.z);
-  const base = new THREE.Mesh(new THREE.BoxGeometry(ZEN.w, 0.1, ZEN.d), M.gravel);
-  base.position.y = 0.05;
-  base.receiveShadow = true;
-  // The raked plane sits a hair above the base's top (0.102 vs 0.1). Two surfaces at
-  // exactly the same depth flicker as the GPU can't decide which is in front (z-fighting).
-  const raked = new THREE.Mesh(
-    new THREE.PlaneGeometry(ZEN.w, ZEN.d).rotateX(-Math.PI / 2),
-    new THREE.MeshStandardMaterial({ map: makeRakedTexture(), roughness: 1 })
-  );
-  raked.position.y = 0.102;
-  raked.receiveShadow = true;
-  g.add(base, raked);
-  // low wooden edging
-  for (const s of [1, -1]) {
-    const ex = new THREE.Mesh(new THREE.BoxGeometry(ZEN.w + 0.6, 0.3, 0.3), M.darkWood);
-    ex.position.set(0, 0.15, s * (ZEN.d / 2 + 0.15));
-    const ez = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, ZEN.d), M.darkWood);
-    ez.position.set(s * (ZEN.w / 2 + 0.15), 0.15, 0);
-    ex.castShadow = ez.castShadow = true;
-    g.add(ex, ez);
+
+class ZenGarden extends Feature {
+  constructor() {
+    super(ZEN.x, ZEN.z);
+    this.mesh(new THREE.BoxGeometry(ZEN.w, 0.1, ZEN.d), M.gravel, 0, 0.05, 0, { receive: true });
+    // The raked plane sits a hair above the base's top (0.102 vs 0.1). Two surfaces at
+    // exactly the same depth flicker as the GPU can't decide which is in front (z-fighting).
+    this.mesh(
+      new THREE.PlaneGeometry(ZEN.w, ZEN.d).rotateX(-Math.PI / 2),
+      new THREE.MeshStandardMaterial({ map: makeRakedTexture(), roughness: 1 }),
+      0, 0.102, 0, { receive: true },
+    );
+    // low wooden edging
+    for (const s of [1, -1]) {
+      this.mesh(new THREE.BoxGeometry(ZEN.w + 0.6, 0.3, 0.3), M.darkWood, 0, 0.15, s * (ZEN.d / 2 + 0.15), { cast: true });
+      this.mesh(new THREE.BoxGeometry(0.3, 0.3, ZEN.d), M.darkWood, s * (ZEN.w / 2 + 0.15), 0.15, 0, { cast: true });
+    }
+    for (const grp of ZEN_GROUPS) {
+      grp.rocks.forEach(([x, z, size], i) => {
+        // A dodecahedron (12 faces), squashed a little, makes a convincing boulder.
+        const rock = this.mesh(new THREE.DodecahedronGeometry(size, 0), i % 2 ? M.stoneD : M.stone,
+          x, size * 0.45, z, { cast: true, receive: true });
+        rock.scale.set(1, 0.75, 0.9);
+        rock.rotation.y = rand() * Math.PI;
+        this.mesh(new THREE.CylinderGeometry(size * 1.15, size * 1.3, 0.06, 7), M.moss, x, 0.13, z);
+        this.solidCircle(x, z, size * 0.9, size * 1.2);
+      });
+    }
+    // The gravel, and the edging around it, which is a step higher.
+    const hw = ZEN.w / 2, hd = ZEN.d / 2;
+    this.platform(-hw, hw, -hd, hd, 0.1);
+    this.platform(-hw - 0.3, hw + 0.3, -hd - 0.3, -hd, 0.3);
+    this.platform(-hw - 0.3, hw + 0.3, hd, hd + 0.3, 0.3);
+    this.platform(-hw - 0.3, -hw, -hd, hd, 0.3);
+    this.platform(hw, hw + 0.3, -hd, hd, 0.3);
   }
-  for (const grp of ZEN_GROUPS) {
-    grp.rocks.forEach(([x, z, size], i) => {
-      // A dodecahedron (12 faces), squashed a little, makes a convincing boulder.
-      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(size, 0), i % 2 ? M.stoneD : M.stone);
-      rock.scale.set(1, 0.75, 0.9);
-      rock.position.set(x, size * 0.45, z);
-      rock.rotation.y = rand() * Math.PI;
-      rock.castShadow = true; rock.receiveShadow = true;
-      const moss = new THREE.Mesh(new THREE.CylinderGeometry(size * 1.15, size * 1.3, 0.06, 7), M.moss);
-      moss.position.set(x, 0.13, z);
-      g.add(rock, moss);
-      addCircleSolid(ZEN.x + x, ZEN.z + z, size * 0.9, size * 1.2);
-    });
+
+  // Is the point (x, z) on the gravel? (For footstep sounds.)
+  contains(x, z) {
+    return Math.abs(x - ZEN.x) <= ZEN.w / 2 && Math.abs(z - ZEN.z) <= ZEN.d / 2;
   }
-  scene.add(g);
-  const minX = ZEN.x - ZEN.w / 2, maxX = ZEN.x + ZEN.w / 2;
-  const minZ = ZEN.z - ZEN.d / 2, maxZ = ZEN.z + ZEN.d / 2;
-  platforms.push(
-    { minX, maxX, minZ, maxZ, y: 0.1 },
-    { minX: minX - 0.3, maxX: maxX + 0.3, minZ: minZ - 0.3, maxZ: minZ, y: 0.3 },
-    { minX: minX - 0.3, maxX: maxX + 0.3, minZ: maxZ, maxZ: maxZ + 0.3, y: 0.3 },
-    { minX: minX - 0.3, maxX: minX, minZ, maxZ, y: 0.3 },
-    { minX: maxX, maxX: maxX + 0.3, minZ, maxZ, y: 0.3 },
-  );
 }
-buildZenGarden();
-export const inZen = (x, z) => Math.abs(x - ZEN.x) <= ZEN.w / 2 && Math.abs(z - ZEN.z) <= ZEN.d / 2;
+export const zenGarden = new ZenGarden();

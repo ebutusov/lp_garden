@@ -17,21 +17,22 @@ import { syncShadow } from './core/lights.js';
 import './core/placement.js'; // reserves the fixed features' footprints
 
 // The world, in layout order.
-import './world/sky.js';
+// Each module creates its feature (a Feature subclass, see world/feature.js) on import.
+import { sky } from './world/sky.js';
 import './world/ground.js';
 import './world/fuji.js';
-import { updateClouds } from './world/clouds.js';
-import { updateTrees } from './world/trees.js';
-import { updateLanterns } from './world/lanterns.js';
-import { updatePond } from './world/pond.js';
-import { updateRipples } from './world/ripples.js';
+import { clouds } from './world/clouds.js';
+import { trees } from './world/trees.js';
+import { lanterns } from './world/lanterns.js';
+import { pond } from './world/pond.js';
+import { ripples } from './world/ripples.js';
 import { updateKoi } from './animals/koi.js';
 import './world/bridge.js';
 import './world/torii.js';
 import './world/steppingStones.js';
 import './world/teaHouse.js';
 import './world/zenGarden.js';
-import { updateShishi } from './world/shishiOdoshi.js';
+import { shishi } from './world/shishiOdoshi.js';
 import './world/fence.js';
 import './world/rocks.js';
 import './world/flowers.js';
@@ -77,23 +78,24 @@ function animate() {
 
   // Re-anchored after the final position (sun tracking goes here, not in setup)
   syncShadow();
-  updateDayNight(dt); // also moves the sky, stars and moon with the player
+  updateDayNight(dt);
+  sky.update(dt, t); // moves the sky, stars and moon with the player
 
-  updatePond(t);
+  pond.update(dt, t);
   updateKoi(dt, t);
   updatePellets(dt, t);
-  updateRipples(dt, t);
-  updateTrees(t);
+  ripples.update(dt, t);
+  trees.update(dt, t);
   updatePetals(dt, t);
-  updateShishi(dt);
+  shishi.update(dt, t);
   updateDog(dt, t);
   updateHearts(dt);
   updateBirds(dt, t, cats);
   updateCats(dt, t);
-  teaThings.update(t);
+  teaThings.update(dt, t);
   updateFireflies(t);
-  updateClouds(dt, t);
-  updateLanterns(t);
+  clouds.update(dt, t);
+  lanterns.update(dt, t);
 
   updateAudio();
   updateHint();

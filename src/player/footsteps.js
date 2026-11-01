@@ -2,9 +2,9 @@ import { camera, cameraGroup } from '../core/camera.js';
 import { player } from '../core/state.js';
 import { POND_Z, WATER_LEVEL, inPond } from '../core/layout.js';
 import { bridgeDeckTop, PLAYER_HEIGHT } from '../core/physics.js';
-import { inTeaHouse } from '../world/teaHouse.js';
-import { inZen } from '../world/zenGarden.js';
-import { spawnRipple } from '../world/ripples.js';
+import { teaHouse } from '../world/teaHouse.js';
+import { zenGarden } from '../world/zenGarden.js';
+import { ripples } from '../world/ripples.js';
 import { SFX } from '../audio/sfx.js';
 
 // ---- Head bob, footsteps and wading ----
@@ -15,13 +15,13 @@ let stepPhase = 0, bobAmp = 0, wasWading = false;
 let lastStepX = cameraGroup.position.x, lastStepZ = cameraGroup.position.z;
 function footstep(wading, p, feet) {
   if (wading) {
-    spawnRipple(p.x, p.z - POND_Z, 1.1, 1.5);
+    ripples.spawn(p.x, p.z - POND_Z, 1.1, 1.5);
     SFX.step('water');
     return;
   }
   const deck = bridgeDeckTop(p.x, p.z);
   const onDeck = deck !== null && Math.abs(feet - deck) < 0.3;
-  SFX.step(onDeck || inTeaHouse(p.x, p.z) ? 'wood' : inZen(p.x, p.z) ? 'gravel' : 'grass');
+  SFX.step(onDeck || teaHouse.contains(p.x, p.z) ? 'wood' : zenGarden.contains(p.x, p.z) ? 'gravel' : 'grass');
 }
 export function updateFootsteps(dt, t) {
   const p = cameraGroup.position;
@@ -30,8 +30,8 @@ export function updateFootsteps(dt, t) {
   const feet = p.y - PLAYER_HEIGHT;
   const wading = !player.flyMode && inPond(p.x, p.z) && feet < WATER_LEVEL;
   if (wading && !wasWading) {
-    spawnRipple(p.x, p.z - POND_Z, 2, 2);
-    spawnRipple(p.x, p.z - POND_Z, 1.2, 1.4);
+    ripples.spawn(p.x, p.z - POND_Z, 2, 2);
+    ripples.spawn(p.x, p.z - POND_Z, 1.2, 1.4);
     SFX.splash(1);
   }
   wasWading = wading;

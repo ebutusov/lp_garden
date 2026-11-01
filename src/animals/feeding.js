@@ -3,8 +3,8 @@ import { M } from '../core/materials.js';
 import { POND_Z, POND_R, WATER_LEVEL, waterSurface } from '../core/layout.js';
 import { cameraGroup } from '../core/camera.js';
 import { player } from '../core/state.js';
-import { pondGroup } from '../world/pond.js';
-import { spawnRipple } from '../world/ripples.js';
+import { pond } from '../world/pond.js';
+import { ripples } from '../world/ripples.js';
 import { SFX } from '../audio/sfx.js';
 
 // ---- Koi feeding ----
@@ -35,9 +35,9 @@ export function tryFeed() {
     const x = target.lx + Math.cos(a) * r, z = target.lz + Math.sin(a) * r;
     const mesh = new THREE.Mesh(pelletGeo, M.pellet);
     mesh.position.set(x, WATER_LEVEL, z);
-    pondGroup.add(mesh);
+    pond.group.add(mesh);
     pellets.push({ mesh, x, z, age: 0 });
-    spawnRipple(x, z, 0.4, 1);
+    ripples.spawn(x, z, 0.4, 1);
   }
   SFX.plop(1);
   feedCooldown = 2;
@@ -52,7 +52,7 @@ export function nearestPellet(x, z) {
   return best;
 }
 export function removePellet(p) {
-  pondGroup.remove(p.mesh);
+  pond.group.remove(p.mesh);
   pellets.splice(pellets.indexOf(p), 1);
 }
 export function updatePellets(dt, t) {
