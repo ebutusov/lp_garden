@@ -50,12 +50,6 @@ export const M = {
   maple2:  mat(0xe88a3a),
   cherry:  [mat(0xf4b6c8), mat(0xf8cfdb), mat(0xe99ab3)],
   cherryTrunk: mat(0x5a3d33, { roughness: 0.9 }),
-  // Transparent: the renderer draws it after opaque objects, blending it over
-  // whatever is already behind (the pond floor and the koi).
-  water:   new THREE.MeshStandardMaterial({
-    color: 0x4aa3b8, transparent: true, opacity: 0.5,
-    roughness: 0.3, metalness: 0.2, flatShading: true
-  }),
   wood:    mat(0x9a5a3a, { roughness: 0.8 }),
   darkWood: mat(0x4a3428, { roughness: 0.85 }),
   bamboo:  mat(0x9bb34a, { roughness: 0.6 }),

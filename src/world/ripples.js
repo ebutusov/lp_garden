@@ -37,7 +37,7 @@ class Ripples extends Feature {
   }
 
   update(dt, t) {
-    const y = waterSurface(t) + 0.01; // just above the water, so it isn't hidden by it
+    const y = waterSurface(t) + 0.045; // just above the wave crests, so they don't hide it
     for (const r of this.rings) {
       if (!r.mesh.visible) continue;
       r.age += dt;

@@ -76,7 +76,7 @@ Every file in `src/world/` defines a class that extends `Feature` (`src/world/fe
 
 - **Post-processing:** the scene renders through an `EffectComposer` that applies UnrealBloom, then an OutputPass.
 - **Lights:** lighting uses physical light units.
-- **Materials:** all materials live in the shared `M` palette and are flat-shaded `MeshStandardMaterial`.
+- **Materials:** all materials live in the shared `M` palette and are flat-shaded `MeshStandardMaterial`. The exceptions have custom shaders: the sky dome is a `ShaderMaterial` (`world/sky.js`), and the pond water (`world/water.js`) is a `MeshStandardMaterial` patched with `onBeforeCompile`. That patch adds vertex waves, a Fresnel blend, a shore band and a round cut-out. Its `uTime` is set in `pond.update`. The reflection is planar (`addMirror`): in the water mesh's `onBeforeRender`, the scene is rendered again from a camera mirrored below the water plane. That pass renders at half resolution into a render target, with an oblique near plane that clips everything below the surface. It only runs while the pond is on screen, and it roughly doubles the draw cost when it does.
 - **Distant haze:** distant objects (Fuji, clouds) fake aerial perspective with `applyHaze` in `dayNight.js`.
 - **Day/night:** a `DAY`/`NIGHT` table drives the transition. `updateDayNight` interpolates between them using `env.nightMix`.
 

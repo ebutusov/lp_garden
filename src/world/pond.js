@@ -3,6 +3,7 @@ import { M, mat } from '../core/materials.js';
 import { rand } from '../core/random.js';
 import { POND_Z, POND_R, WATER_LEVEL, waterSurface } from '../core/layout.js';
 import { Feature } from './feature.js';
+import { makeWaterMaterial, makeWaterGeometry, addMirror } from './water.js';
 
 // ---- Pond with water ----
 // Everything in the pond lives in its group, centred on the pond, so its parts (and
@@ -28,9 +29,13 @@ class Pond extends Feature {
     this.mesh(new THREE.CircleGeometry(POND_R, 28), mat(0x3b5a52, { roughness: 0.9 }), 0, -0.9, 0)
       .rotation.x = -Math.PI / 2;
 
-    // The water is just a translucent disc; the floor and fish show through it.
-    this.water = this.mesh(new THREE.CircleGeometry(POND_R, 28), M.water, 0, WATER_LEVEL, 0);
-    this.water.rotation.x = -Math.PI / 2;
+    // The water: a wavy, translucent surface with its own shader code (see water.js); the
+    // floor and fish show through it. Transparent, so the renderer draws it after the
+    // opaque objects and blends it over whatever is already behind.
+    const { material, uniforms } = makeWaterMaterial();
+    this.waterUniforms = uniforms;
+    this.water = this.mesh(makeWaterGeometry(), material, 0, WATER_LEVEL, 0);
+    addMirror(this.water, uniforms);
 
     // Lily pads. DoubleSide: visible from above and below (from under the water).
     for (let i = 0; i < 7; i++) {
@@ -46,9 +51,10 @@ class Pond extends Feature {
     }
   }
 
-  // gentle water bob
+  // gentle water bob, and the clock the waves run on
   update(dt, t) {
     this.water.position.y = waterSurface(t);
+    this.waterUniforms.uTime.value = t;
   }
 }
 export const pond = new Pond();
