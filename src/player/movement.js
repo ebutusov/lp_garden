@@ -3,9 +3,7 @@ import { camera, cameraGroup } from '../core/camera.js';
 import { clamp } from '../core/random.js';
 import { player } from '../core/state.js';
 import { WORLD, WATER_LEVEL, FENCE_R, FENCE_GAP, FENCE_H, BRIDGE_RAIL, inPond } from '../core/layout.js';
-import {
-  solids, bridgeDeckTop, groundHeightAt, deckBlocks, PLAYER_HEIGHT, PLAYER_RADIUS, MAX_STEP,
-} from '../core/physics.js';
+import { bridgeDeckTop, PLAYER_HEIGHT, PLAYER_RADIUS, MAX_STEP } from '../core/physics.js';
 import { keys } from '../input/keys.js';
 import { touch } from '../input/touch.js';
 
@@ -22,6 +20,12 @@ const forward = new THREE.Vector3();
 const right = new THREE.Vector3();
 const wish = new THREE.Vector3();
 
+// The garden's colliders (core/physics.js), handed over by main.js.
+let physics = null;
+export function initMovement(gardenPhysics) {
+  physics = gardenPhysics;
+}
+
 // Push the player out of trunks, rocks, walls and other solids (sliding along them).
 // Rather than stopping dead on contact, the player is moved to the nearest point just
 // outside the solid. Movement toward the obstacle is cancelled while movement along
@@ -29,7 +33,7 @@ const wish = new THREE.Vector3();
 function resolveSolids(p, feet) {
   const R = PLAYER_RADIUS;
   for (let iter = 0; iter < 2; iter++) {
-    for (const s of solids) {
+    for (const s of physics.solids) {
       if (feet >= s.h) continue; // standing higher than it: no collision (e.g. on top of a table)
       if (s.r !== undefined) {
         const dx = p.x - s.x, dz = p.z - s.z, d = Math.hypot(dx, dz), min = s.r + R;
@@ -148,8 +152,8 @@ export function updateMovement(dt) {
   // Anything higher than a step (e.g. the deck's side over the water) blocks you,
   // except the bank when wading out of the pond: you climb out instead.
   const climbingOut = wading && !inPond(p.x, p.z) && bridgeDeckTop(p.x, p.z) === null;
-  const tooHigh = groundHeightAt(p.x, p.z, feet) - feet > MAX_STEP && !climbingOut;
-  if (tooHigh || deckBlocks(p.x, p.z, feet, p.y)) {
+  const tooHigh = physics.groundHeightAt(p.x, p.z, feet) - feet > MAX_STEP && !climbingOut;
+  if (tooHigh || physics.deckBlocks(p.x, p.z, feet, p.y)) {
     p.x = prevX;
     p.z = prevZ;
   }
@@ -165,7 +169,7 @@ export function updateMovement(dt) {
   // Water drag: sink slowly instead of dropping like a stone.
   if (inPond(p.x, p.z) && feet < WATER_LEVEL) player.verticalVel = Math.max(player.verticalVel, -SINK_SPEED);
   p.y += player.verticalVel * dt;
-  const floor = groundHeightAt(p.x, p.z, feet) + PLAYER_HEIGHT;
+  const floor = physics.groundHeightAt(p.x, p.z, feet) + PLAYER_HEIGHT;
   // Snap down while walking downhill so you don't hop off the bridge's slope.
   const stepDown = wasOnGround && player.verticalVel <= 0 && p.y - floor < MAX_STEP;
   if (p.y <= floor || stepDown) {

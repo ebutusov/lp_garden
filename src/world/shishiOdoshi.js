@@ -1,7 +1,5 @@
 import * as THREE from 'three';
 import { M } from '../core/materials.js';
-import { POND_Z, SHISHI } from '../core/layout.js';
-import { ripples } from './ripples.js';
 import { SFX, distVol } from '../audio/sfx.js';
 import { Feature } from './feature.js';
 
@@ -15,11 +13,15 @@ const SHISHI_FILL = 4.5;
 const tmpV = new THREE.Vector3(); // reused every time, to avoid allocating per frame
 const ease = (a, b, k) => a + (b - a) * k * k; // ease-in: starts slow, speeds up (gravity)
 
-class ShishiOdoshi extends Feature {
-  constructor() {
-    super(SHISHI.x, SHISHI.z);
+// It stands at (x, z) on the rim of `pond` and pours into it, making `ripples`.
+export class ShishiOdoshi extends Feature {
+  constructor(ctx, { x, z, pond, ripples }) {
+    super(ctx, { x, z });
+    this.pond = pond;
+    this.ripples = ripples;
     // local +X points at the pond centre
-    this.group.rotation.y = Math.atan2(-(POND_Z - SHISHI.z), -SHISHI.x);
+    const centre = pond.group.position;
+    this.group.rotation.y = Math.atan2(-(centre.z - z), centre.x - x);
 
     for (const z of [0.45, -0.45]) this.mesh(new THREE.DodecahedronGeometry(0.35, 0), M.stoneD, -0.3, 0.15, z);
     this.mesh(new THREE.DodecahedronGeometry(0.3, 0), M.stone, -0.95, 0.45, 0); // the stone it knocks
@@ -90,8 +92,10 @@ class ShishiOdoshi extends Feature {
         // just before rendering, so force an update first.
         this.group.updateMatrixWorld(true);
         const m = this.pivot.localToWorld(tmpV.set(SHISHI_MOUTH, 0, 0));
-        ripples.spawn(m.x, m.z - POND_Z, 1.2, 1.8);
-        ripples.spawn(m.x, m.z - POND_Z, 0.6, 1.2);
+        // Ripples are pond-local: subtract the pond's position.
+        const c = this.pond.group.position;
+        this.ripples.spawn(m.x - c.x, m.z - c.z, 1.2, 1.8);
+        this.ripples.spawn(m.x - c.x, m.z - c.z, 0.6, 1.2);
         SFX.splash(0.5 * distVol(m.x, m.z, 40));
       }
     } else if (this.state === 'pour') {
@@ -101,7 +105,7 @@ class ShishiOdoshi extends Feature {
       this.angle = ease(SHISHI_TIP, SHISHI_REST, k);
       if (k >= 1) {
         this.go('fill');
-        SFX.clack(distVol(SHISHI.x, SHISHI.z, 45));
+        SFX.clack(distVol(this.group.position.x, this.group.position.z, 45));
       }
     }
     // After the knock the tube rebounds briefly off the stone: a damped oscillation
@@ -110,4 +114,3 @@ class ShishiOdoshi extends Feature {
     this.pivot.rotation.z = this.angle - rebound;
   }
 }
-export const shishi = new ShishiOdoshi();

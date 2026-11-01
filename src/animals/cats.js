@@ -3,13 +3,9 @@ import { mat } from '../core/materials.js';
 import { clamp } from '../core/random.js';
 import { cameraGroup } from '../core/camera.js';
 import { env } from '../core/state.js';
-import { surfaceHeightAt } from '../core/physics.js';
 import { SFX, distVol } from '../audio/sfx.js';
 import { Feature } from '../world/feature.js';
 import { Animal } from './animal.js';
-import { hearts } from './hearts.js';
-import { dog } from './dog.js';
-import { birds } from './birds.js';
 
 // ---- Cats ----
 // Three cats with their own routines: they wander, sit, groom, curl up for a nap, stalk
@@ -40,8 +36,8 @@ class Cat extends Animal {
   static R = 0.3;       // collision radius
   static PET_R = 2.4;   // petting reach
 
-  constructor(coat, { parent, dog, birds, hearts }) {
-    super(0, 0, { radius: Cat.R, height: 0.8, parent }); // the player (and the dog) can't walk through a cat
+  constructor(ctx, { coat, parent, dog, birds, hearts }) {
+    super(ctx, { radius: Cat.R, height: 0.8, parent }); // the player (and the dog) can't walk through a cat
     Object.assign(this, { dog, birds, hearts });
     this.name = coat.name;
     this.build(coat);
@@ -261,7 +257,7 @@ class Cat extends Animal {
     const swing = Math.sin(this.phase) * 0.6 * moving * (1 - sit) * (1 - lie);
     const jump = this.state === 'pounce' ? Math.sin(Math.min(1, this.pounceT / 0.45) * Math.PI) * 0.45 : 0;
     const hipY = 0.34 + (0.15 - 0.34) * sit + (0.13 - 0.34) * lie + (0.24 - 0.34) * crouch;
-    this.group.position.set(this.x, surfaceHeightAt(this.x, this.z) + jump, this.z);
+    this.group.position.set(this.x, this.groundAt(this.x, this.z) + jump, this.z);
     this.group.rotation.y = this.heading;
     this.torso.position.y = hipY + Math.abs(Math.sin(this.phase)) * 0.015 * moving;
     this.torso.rotation.x = -0.6 * sit + 0.1 * crouch - (jump ? 0.25 : 0);
@@ -300,20 +296,16 @@ class Cat extends Animal {
   }
 }
 
-// All the cats.
+// All the cats. They run from the `dog`, stalk the `birds`, and show `hearts` when petted.
 export class Cats extends Feature {
   static PET_R = Cat.PET_R;
 
-  constructor({ dog, birds, hearts }) {
-    super();
-    this.list = CAT_COATS.map((coat) => new Cat(coat, { parent: this.group, dog, birds, hearts }));
+  constructor(ctx, { dog, birds, hearts }) {
+    super(ctx);
+    this.list = CAT_COATS.map((coat) => new Cat(ctx, { coat, parent: this.group, dog, birds, hearts }));
   }
 
   update(dt, t) {
     for (const c of this.list) c.update(dt, t);
   }
 }
-export const cats = new Cats({ dog, birds, hearts });
-// The birds watch out for cats, but are made first (cats stalk them), so they're
-// told about the cats now.
-birds.cats = cats;

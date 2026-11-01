@@ -1,15 +1,16 @@
 import * as THREE from 'three';
 import { M } from '../core/materials.js';
-import { POND_Z, BRIDGE_SPAN, BRIDGE_RISE, BRIDGE_WIDTH, BRIDGE_DECK, BRIDGE_RAIL } from '../core/layout.js';
+import { BRIDGE_SPAN, BRIDGE_RISE, BRIDGE_WIDTH, BRIDGE_DECK, BRIDGE_RAIL } from '../core/layout.js';
 import { Feature } from './feature.js';
 
 // ---- Bridge over the pond ----
 // Built along local X, then turned to run north-south across the pond at x = 0.
 // Its walkable surface is computed separately (bridgeDeckTop in physics.js) from the
-// same arc formula, rather than from the meshes.
-class Bridge extends Feature {
-  constructor() {
-    super(0, POND_Z);
+// same arc formula, rather than from the meshes. That's why its measurements are
+// layout constants shared with physics, and only its position (the pond's z) is passed in.
+export class Bridge extends Feature {
+  constructor(ctx, { z }) {
+    super(ctx, { z });
     this.group.rotation.y = Math.PI / 2;
     // arced deck using a series of boxes
     const SPAN = BRIDGE_SPAN;
@@ -37,4 +38,3 @@ class Bridge extends Feature {
     }
   }
 }
-export const bridge = new Bridge();

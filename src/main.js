@@ -1,65 +1,58 @@
 // ---- Entry point ----
-// Importing a module runs its top-level code once, in import order, depth first.
-// Most modules here build their meshes as a side effect of being imported, so this
-// list is also the order in which the garden is built.
-//
-// ORDER MATTERS, for two reasons:
-//  1. The layout comes from one seeded random sequence (core/random.js). The modules
-//     that call rand() at load time must run in this order: ground (mounds), trees,
-//     pond (lily pads), koi, stepping stones, zen garden, rocks, flowers. Reordering
-//     them, or making an earlier module import a later one, rearranges the garden.
-//  2. The animals pick their starting spots by avoiding everything in `solids`, so
-//     every world module that adds solids must load before any animal module.
+// Importing a module runs its top-level code once, in import order. The modules here
+// mostly just define classes and functions; nothing in the garden exists until this
+// file builds it. It makes the shared context, hands it to buildGarden() (garden.js),
+// which constructs every feature and animal in a deliberate order, and then gives the
+// effects, player, input and UI modules the parts of the garden they work with.
+import { scene } from './core/scene.js';
 import { clock } from './core/clock.js';
 import { camera } from './core/camera.js';
 import { renderer, composer } from './core/renderer.js';
 import { syncShadow } from './core/lights.js';
-import './core/placement.js'; // reserves the fixed features' footprints
+import { SEED, mulberry32 } from './core/random.js';
+import { Physics } from './core/physics.js';
+import { Placement } from './core/placement.js';
+import { buildGarden } from './garden.js';
 
-// The world, in layout order.
-// Each module creates its feature (a Feature subclass, see world/feature.js) on import.
-import { sky } from './world/sky.js';
-import './world/ground.js';
-import './world/fuji.js';
-import { clouds } from './world/clouds.js';
-import { trees } from './world/trees.js';
-import { lanterns } from './world/lanterns.js';
-import { pond } from './world/pond.js';
-import { ripples } from './world/ripples.js';
-import { koi } from './animals/koi.js';
-import './world/bridge.js';
-import './world/torii.js';
-import './world/steppingStones.js';
-import './world/teaHouse.js';
-import './world/zenGarden.js';
-import { shishi } from './world/shishiOdoshi.js';
-import './world/fence.js';
-import './world/rocks.js';
-import './world/flowers.js';
-import { teaThings } from './world/teaThings.js';
-
-// Effects.
-import { updatePetals } from './effects/petals.js';
+import { initPetals, updatePetals } from './effects/petals.js';
 import { updateFireflies } from './effects/fireflies.js';
-import { updateDayNight } from './effects/dayNight.js';
+import { initDayNight, updateDayNight } from './effects/dayNight.js';
 
-// Animals: after every solid is in place.
-import { feeding } from './animals/feeding.js';
-import { dog } from './animals/dog.js';
-import { hearts } from './animals/hearts.js';
-import { birds } from './animals/birds.js';
-import { cats } from './animals/cats.js';
-
-// The player, input and UI.
 import { updateLook } from './player/look.js';
-import { updateMovement } from './player/movement.js';
-import { updateFootsteps } from './player/footsteps.js';
-import './input/keyboardMouse.js';
+import { initMovement, updateMovement } from './player/movement.js';
+import { initFootsteps, updateFootsteps } from './player/footsteps.js';
+import { setupKeyboardMouse } from './input/keyboardMouse.js';
+import { setupTouch } from './input/touch.js';
 import { updateAudio } from './audio/ambience.js';
-import { updateHint } from './ui/hint.js';
+import { initHint, updateHint } from './ui/hint.js';
 import { drawCompass } from './ui/compass.js';
 import { setHelpVisible } from './ui/help.js';
-import './debug.js';
+import { installDebug } from './debug.js';
+
+// ---- The shared context ----
+// What every feature builds into or draws from (see world/feature.js):
+//  - scene:     the scene graph it adds its meshes to;
+//  - physics:   the colliders it registers (core/physics.js);
+//  - placement: where random props may still go (core/placement.js);
+//  - rand:      the ONE seeded random generator, so the layout is the same every visit.
+// Placement draws from the same `rand`, so its random spots are part of that sequence.
+const rand = mulberry32(SEED);
+const ctx = { scene, physics: new Physics(), placement: new Placement(rand), rand };
+
+const garden = buildGarden(ctx, { anisotropy: renderer.capabilities.getMaxAnisotropy() });
+const {
+  sky, pond, koi, feeding, ripples, trees, shishi, dog, hearts, birds, cats, teaThings, clouds, lanterns,
+} = garden;
+
+// Hand the function modules the parts of the garden they need.
+initPetals(garden);
+initDayNight(garden);
+initMovement(ctx.physics);
+initFootsteps(garden);
+initHint(garden);
+setupKeyboardMouse(garden);
+setupTouch(garden);
+installDebug(garden, ctx);
 
 // ---- Animation loop ----
 // The "game loop": every frame, advance the simulation by dt, then draw. The browser

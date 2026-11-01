@@ -30,6 +30,15 @@ export const PATH_LANTERN_GLOW = 0.25; // light output relative to a full-size l
 export const PATH_PAPER_GLOW = 0.55;   // their paper boxes glow this much of a full-size one's
 export const PATH_LANTERN_SPOTS = [27, 19, 11].flatMap((z) => [[-2.8, z], [2.8, z]]);
 export const TORII_Z = 34;
+// Planned tree spots. Each tree is jittered around its spot, and skipped if there's no room.
+export const TREE_SPOTS = [
+  [14, 10], [-16, 6], [20, -14], [-22, -10], [10, -26],
+  [-12, 22], [26, 18], [-28, -22], [38, -16], [-36, 14],
+  [6, 32], [-6, -34], [18, 30], [-24, 26],
+  [30, 28], [-30, 30], [42, 10], [-40, -6], [-14, -30], [24, -30], [-34, -26], [0, -42],
+];
+// Mount Fuji's foot, far beyond the fence (and the fog).
+export const FUJI_POS = new THREE.Vector3(-90, -2, -250);
 
 // The arched bridge runs north-south across the pond at x = 0.
 export const BRIDGE_SPAN = (POND_R + 2) * 2; // long enough to land on both banks

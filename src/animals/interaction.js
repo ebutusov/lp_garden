@@ -1,8 +1,7 @@
 import { cameraGroup } from '../core/camera.js';
 import { player } from '../core/state.js';
-import { Dog, dog } from './dog.js';
-import { Cats, cats } from './cats.js';
-import { feeding } from './feeding.js';
+import { Dog } from './dog.js';
+import { Cats } from './cats.js';
 
 // ---- Interacting with the animals ----
 // One place decides what the E key (or the ✋ button) does, given the animals and the
@@ -33,4 +32,3 @@ export class Interaction {
     return this.feeding.tryFeed();
   }
 }
-export const interaction = new Interaction({ dog, cats, feeding });

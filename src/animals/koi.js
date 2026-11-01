@@ -1,11 +1,7 @@
 import * as THREE from 'three';
 import { mat } from '../core/materials.js';
-import { rand, clamp } from '../core/random.js';
-import { POND_Z, POND_R } from '../core/layout.js';
-import { pond } from '../world/pond.js';
-import { ripples } from '../world/ripples.js';
+import { clamp } from '../core/random.js';
 import { SFX, distVol } from '../audio/sfx.js';
-import { feeding } from './feeding.js';
 import { Feature } from '../world/feature.js';
 
 // ---- Koi fish under the water ----
@@ -40,8 +36,10 @@ const KOI_COUNT = 7;
 // Fish faces +Z with its tail toward -Z. Building every model facing +Z means
 // rotation.y = atan2(dx, dz) turns it to face any direction (dx, dz).
 class Koi extends Feature {
-  constructor(type, parent) {
-    super(0, 0, parent);
+  constructor(ctx, { type, pondR, parent }) {
+    super(ctx, { parent });
+    const { rand } = ctx;
+    this.pondR = pondR;
     // A little emissive colour keeps them vivid seen through the darkening water.
     const koiMat = (color, opts = {}) =>
       mat(color, { roughness: 0.5, emissive: color, emissiveIntensity: 0.25, ...opts });
@@ -96,18 +94,21 @@ class Koi extends Feature {
 
   // Keep the fish inside the pond.
   keepInPond() {
-    const r = Math.hypot(this.x, this.z), maxR = POND_R - 1;
+    const r = Math.hypot(this.x, this.z), maxR = this.pondR - 1;
     if (r > maxR) { this.x *= maxR / r; this.z *= maxR / r; }
   }
 }
 
 // The school, inside the pond's group, so the fish swim in pond-local coordinates.
+// They eat from `feeding` and make `ripples`.
 export class KoiSchool extends Feature {
-  constructor(pond, ripples, feeding) {
-    super(0, 0, pond.group);
+  constructor(ctx, { pond, ripples, feeding }) {
+    super(ctx, { parent: pond.group });
+    this.pond = pond;
     this.ripples = ripples;
     this.feeding = feeding;
-    this.list = Array.from({ length: KOI_COUNT }, (_, i) => new Koi(KOI_TYPES[i % KOI_TYPES.length], this.group));
+    this.list = Array.from({ length: KOI_COUNT }, (_, i) =>
+      new Koi(ctx, { type: KOI_TYPES[i % KOI_TYPES.length], pondR: pond.radius, parent: this.group }));
   }
 
   // Steering behaviours (as in Craig Reynolds' "boids"): each fish adds up a few desire
@@ -180,7 +181,8 @@ export class KoiSchool extends Feature {
       if (food && feeding.pellets.includes(food) && Math.hypot(food.x - k.x, food.z - k.z) < k.r + 0.3) {
         feeding.remove(food);
         ripples.spawn(food.x, food.z, 0.6, 1.2);
-        SFX.plop(0.6 * distVol(food.x, food.z + POND_Z, 30));
+        const c = this.pond.group.position; // food is pond-local; distVol wants world
+        SFX.plop(0.6 * distVol(food.x + c.x, food.z + c.z, 30));
       }
       // A sharp turn, or now and then a nose at the surface, ripples the water.
       k.rippleCooldown -= dt;
@@ -198,4 +200,3 @@ export class KoiSchool extends Feature {
     }
   }
 }
-export const koi = new KoiSchool(pond, ripples, feeding);

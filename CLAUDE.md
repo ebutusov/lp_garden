@@ -19,7 +19,7 @@ npm run preview   # serve dist/
 
 ## Testing
 
-Verify changes in a real browser by scripting the page through `window.garden`, defined in `src/debug.js`. It has these helpers:
+Verify changes in a real browser by scripting the page through `window.garden`, which `installDebug(garden, ctx)` in `src/debug.js` sets up once the garden is built. It has these helpers:
 
 | Helper | What it does |
 |---|---|
@@ -33,44 +33,53 @@ Verify changes in a real browser by scripting the page through `window.garden`, 
 | `layout` | Counts of what got placed |
 | `fingerprint()` | Hash of everything `rand()` placed. Currently `4d19f052`; if a change alters it, the layout changed |
 
-Add helpers there when a new feature needs to be observable.
+Add helpers there when a new feature needs to be observable; they read the built objects from the `garden` argument, not from imports.
 
 Testing gotchas:
 - **Throttled windows:** Chrome throttles `requestAnimationFrame` to about 1 fps when the window is occluded. Keep the browser visible to get real fps. For logic-only tests, override it: `window.requestAnimationFrame = cb => setTimeout(() => cb(performance.now()), 16)`.
 - **Frame step cap:** `animate()` caps each frame's step at 0.05 s, so simulated time runs slower than wall time at low fps.
-- **Silent runtime errors:** an exception inside any `update*` function aborts the whole frame silently. Check the console after testing.
+- **Silent runtime errors:** an exception inside any `update` method or `update*` function aborts the whole frame silently. Check the console after testing.
 - **Sound off:** every `SFX.*` function must start with `if (!audible() || vol < 0.02) return;`, because the audio context doesn't exist until sound is turned on.
 
 ## Architecture
 
-Each module builds its meshes when it's first imported. World features expose an `update(dt, t)` method (see below); the effects, animals and player modules export `update*(dt, t)` functions. `animate()` in `src/main.js` calls every update in order, then `composer.render()`.
+Nothing in the garden is built on import. `src/main.js` makes the shared context `ctx`, calls `buildGarden(ctx)` in `src/garden.js` (the composition root), and hands the result to the function modules (effects, player, input, UI, debug). World features and animals are classes with an `update(dt, t)` method; the effects and player modules export `update*(dt, t)` functions. `animate()` in `src/main.js` calls every update in a fixed order, then `composer.render()`.
+
+### Dependency injection
+
+- **`ctx`** is `{ scene, physics, placement, rand }`: the scene graph, the colliders (a `Physics` instance), the prop placement (a `Placement` instance) and the one seeded generator. `main.js` creates it once.
+- **Constructors are given what they need:** `new Feature(ctx, { x, z, parent, ...options })`. A feature's own position and size come in as options, which `garden.js` reads from `layout.js`. Any other feature or animal it works with is passed in too (`new Ripples(ctx, { pond })`, `new Cats(ctx, { dog, birds, hearts })`). Never import an instance; modules in `world/` and `animals/` export classes only.
+- **Still imported directly:** THREE, the materials (`M`, `mat`), textures, layout constants shared between systems (`BRIDGE_*`, `WATER_LEVEL`, and the formulas `waterSurface`, `inPond`, `windStrength`, `WIND_DIR`), `SFX`/`distVol`, `clock`, and the viewer/app state (`cameraGroup`, `camera`, `player`, `env`, `keys`, `touch`, `showToast`).
+- **Function modules** (effects, player, input, UI, debug) get the instances they use from `main.js` through `init*`/`setup*` calls (`initPetals(garden)`, `initMovement(ctx.physics)`, `setupKeyboardMouse(garden)`, `installDebug(garden, ctx)`). Event listeners that need an instance are registered there, not at import.
 
 ### World features are classes
 
-Every file in `src/world/` defines a class that extends `Feature` (`src/world/feature.js`), and exports one instance of it, created on import: `export const pond = new Pond();`.
+Every file in `src/world/` exports a class that extends `Feature` (`src/world/feature.js`). `garden.js` creates one instance of each: `new Pond(ctx, { z: POND_Z, radius: POND_R })`.
 
 - **Composition:** a feature owns `this.group`, a `THREE.Group` it adds to the scene (or to a parent feature's group), rather than extending `THREE.Group`. Use `torii.group`, `teaHouse.group` and so on wherever an `Object3D` is needed.
 - **`update(dt, t)`:** called from `animate()`, each in its fixed slot. The base version does nothing, so static features don't define one.
-- **Helpers:** use them instead of repeating the boilerplate. `this.mesh(geo, mat, x, y, z, { cast, receive, parent })` makes a mesh and adds it to the group; the shadow flags default to `false`. `solidCircle`, `solidBox` and `platform` take local coordinates and register colliders in world coordinates. Boxes only work for groups that aren't rotated.
-- **Collections:** trees and lanterns are made of smaller objects. `trees.list` holds `Tree` objects (`PineTree`, `MapleTree` and `CherryTree`), each with its own `crown` and `sway()`. `lanterns.list` holds `Lantern` objects, whose shared night brightness is the static `Lantern.brightness`.
-- **Renamed APIs:** use `ripples.spawn(lx, lz, size, life)` to make a ripple, `pond.group` for the pond-local frame, and `teaHouse.contains(x, z)` / `zenGarden.contains(x, z)` to test whether a point is inside.
+- **Helpers:** use them instead of repeating the boilerplate. `this.mesh(geo, mat, x, y, z, { cast, receive, parent })` makes a mesh and adds it to the group; the shadow flags default to `false`. `solidCircle`, `solidBox` and `platform` take local coordinates and register colliders in world coordinates through `this.ctx.physics`. Boxes only work for groups that aren't rotated. Use `this.ctx.rand` and `this.ctx.placement` for random placement.
+- **Collections:** trees and lanterns are made of smaller objects. `trees.list` holds `Tree` objects (`PineTree`, `MapleTree` and `CherryTree`), each with its own `crown` and `sway()`. `lanterns.list` holds `Lantern` objects; their shared night brightness is `lanterns.brightness`, which `dayNight.js` sets.
+- **Bird perches:** anything birds sit on (`Tree`, `Lantern`, `Torii`, `TeaHouse`, `Fence`, and the `Trees`/`Lanterns` collections) has `perches()`, returning `[{ parent, local, kind }]` in the parent's local frame. Pass a new perch source to `Birds` in `garden.js`.
+- **APIs:** use `ripples.spawn(lx, lz, size, life)` to make a ripple, `pond.group` for the pond-local frame (`pond.radius` for its size), and `teaHouse.contains(x, z)` / `zenGarden.contains(x, z)` to test whether a point is inside.
 
 | Folder | Contents |
 |---|---|
-| `src/core/` | `scene`, `camera` (+ `cameraGroup`), `renderer` (+ `composer`, `bloom`), `lights`, `materials` (`M`, `mat`), `textures`, `layout` (constants), `placement`, `physics`, `random`, `clock`, `state` |
+| `src/` | `main.js` (context, wiring, game loop), `garden.js` (builds everything), `debug.js` |
+| `src/core/` | `scene`, `camera` (+ `cameraGroup`), `renderer` (+ `composer`, `bloom`), `lights`, `materials` (`M`, `mat`), `textures`, `layout` (constants), `placement` (`Placement`), `physics` (`Physics`), `random` (`mulberry32`, `SEED`), `clock`, `state` |
 | `src/world/` | One file per garden feature |
 | `src/effects/` | `petals`, `fireflies`, `dayNight` |
-| `src/animals/` | `koi`, `feeding`, `dog`, `birds`, `cats`, `hearts`, `interaction` |
+| `src/animals/` | `animal` (base class), `koi`, `feeding`, `dog`, `birds`, `cats`, `hearts`, `interaction` |
 | `src/player/` | `look`, `movement`, `flight`, `footsteps` |
 | `src/input/`, `src/ui/`, `src/audio/` | Controls, HUD and help screen, sound |
 
 ### Module rules
 
-- **Import order is load order.** `main.js` imports modules in a deliberate order, which matters for two reasons:
-  - **Layout:** the modules that call `rand()` at load time must run in the order ground (mounds) → trees → pond (lily pads) → koi → stepping stones → zen garden → rocks → flowers. A core or shared module must never import any of them, or the seeded sequence shifts and the whole layout changes. Check `garden.fingerprint()` after reshuffling imports. Inside a constructor, keep the order of the `rand()` calls too.
-  - **Spawning:** every world module that adds `solids` must load before the animal modules, because animals pick their starting spots by avoiding `solids`.
+- **Construction order is layout order.** `buildGarden()` in `garden.js` creates everything in a deliberate order (import order no longer matters), for two reasons:
+  - **Layout:** whatever draws from `ctx.rand` must be built in the order ground (mounds) → trees → pond (lily pads) → koi → stepping stones → zen garden → rocks → flowers. The koi are built in that slot, before the other animals. `fingerprint()` also hashes colliders in the order they were added, so keep the whole order. Check `garden.fingerprint()` after reordering. Inside a constructor, keep the order of the `rand()` calls too.
+  - **Spawning:** every feature that adds colliders must be built before the dog, birds and cats, because animals pick their starting spots by avoiding them.
 - **Shared mutable state** lives in objects, because importers can't assign to an exported `let`. Day/night is `env.isNight` and `env.nightMix` (0 to 1); anything with a night look reads `env.nightMix`. The player's `yaw`, `pitch`, `flyMode`, `verticalVel` and `onGround` live on `player`. Both are in `src/core/state.js`.
-- **Avoid import cycles.** `updateBirds(dt, t, cats)` takes the cats as an argument because `cats.js` imports `birds.js`.
+- **Mutual references are wired after construction.** The cats need the birds (to stalk them) and the birds need the cats (to flee them), so `garden.js` builds the birds, then the cats, then sets `birds.cats = cats`.
 
 ### Rendering
 
@@ -82,30 +91,30 @@ Every file in `src/world/` defines a class that extends `Feature` (`src/world/fe
 
 ### Layout is seeded
 
-All placement uses `rand()` from `src/core/random.js`, a mulberry32 generator with a fixed seed. Only purely visual effects (petals, ripples, fireflies, animal wandering) use `Math.random`. Keep it that way, or layouts stop being reproducible.
+All placement uses `ctx.rand`, the one mulberry32 generator `main.js` makes from `SEED` in `src/core/random.js`. Only purely visual effects (petals, ripples, fireflies, animal wandering) use `Math.random`. Keep it that way, or layouts stop being reproducible.
 
-Fixed features are positioned by the constants in `src/core/layout.js`, such as `POND_Z`, `POND_R`, `TEA`, `ZEN` and `FENCE_R`.
+Fixed features are positioned by the constants in `src/core/layout.js`, such as `POND_Z`, `POND_R`, `TEA`, `ZEN`, `FENCE_R`, `TREE_SPOTS` and `FUJI_POS`. `garden.js` passes them to the constructors.
 
 ### Placement and physics are separate systems
 
-- **Placement:** `reserve(x, z, r)`, `isClear(x, z, r)` and `randomFreeSpot()` in `placement.js` keep props from overlapping. The fixed features reserve their circles at the bottom of `placement.js`, before anything random is placed. A new fixed feature must reserve its footprint there too, or trees and rocks will spawn inside it.
-- **Collision** (`physics.js`):
-  - **What blocks:** `solids` holds circles and boxes, each with a blocking height `h`.
-  - **What you stand on:** `platforms` holds walkable boxes and `mounds` holds grass bumps. `groundHeightAt(x, z, feet)` combines these with the bridge deck (`bridgeDeckTop` / `deckBlocks`) and the pond, where the player sinks until only their head is above water.
+- **Placement:** `ctx.placement` (`Placement` in `placement.js`) has `reserve(x, z, r)`, `isClear(x, z, r)` and `randomFreeSpot()` to keep props from overlapping. Its constructor reserves the fixed features' circles (`reserveFixedFeatures`), before anything random is placed. A new fixed feature must reserve its footprint there too, or trees and rocks will spawn inside it.
+- **Collision** (`ctx.physics`, a `Physics` from `physics.js`):
+  - **What blocks:** `physics.solids` holds circles and boxes, each with a blocking height `h`. `addCircleSolid` returns the collider, so its owner can move it (the animals do).
+  - **What you stand on:** `physics.platforms` holds walkable boxes and `physics.mounds` holds grass bumps. `physics.groundHeightAt(x, z, feet)` combines these with the bridge deck (`bridgeDeckTop`, a plain export, and `physics.deckBlocks`) and the pond, where the player sinks until only their head is above water.
   - **Ring collision:** the fence is handled separately as a ring collision, in `player/movement.js`.
 - **Player movement:** `updateMovement` sub-steps movement in steps of at most 0.2 units, so the player can't tunnel through thin walls.
-- **Animals:** the dog and cats use the shared `groundBlocked(x, z, r, self)` instead of the player physics. It includes the bridge ends padded by body radius, the pond and the other animals.
+- **Animals:** the dog and cats use `physics.groundBlocked(x, z, r, self)` (through `Animal.blocked`) instead of the player physics. It includes the bridge ends padded by body radius, the pond and the other animals.
 
 ### Animals
 
-Each animal is a small state machine with its own `update*` function:
+Each animal is a class and a small state machine with its own `update(dt, t)`. The dog, cats and birds extend `Animal` (`animals/animal.js`), a `Feature` whose group is the body's root. It adds `blob()` for body parts, an optional collision circle (`this.solid`, kept in step with `syncSolid()`), `blocked(x, z)`, `groundAt(x, z)` and `freeHeading()` for feeler steering. Groups of animals are collections with a `list` (`koi.list`, `cats.list`, `birds.list`).
 
-- **Koi:** steering with separation plus a hard push-apart, so the school doesn't merge when fed.
-- **Dog:** a Shiba Inu.
-- **Birds:** perch on lanterns, trees, the torii and the fence using `localToWorld`, and fly along Bézier paths. The player, the dog and non-stalking cats scare them off.
-- **Cats:** sit, groom, loaf, stalk, pounce and flee from the dog. They turn in place before moving, via `steerCat`.
+- **Koi:** `KoiSchool` of `Koi`, inside the pond's group. Steering with separation plus a hard push-apart, so the school doesn't merge when fed. Food comes from `Feeding` (`feeding.pellets`, `feeding.tryFeed()`).
+- **Dog:** `Dog`, a Shiba Inu. `dog.pet()`; `Dog.PET_R` is its petting reach.
+- **Birds:** `Birds` flock of `Bird`. They perch on whatever the perch sources' `perches()` offer, convert those points with `localToWorld`, and fly along Bézier paths. The player, the dog and non-stalking cats scare them off. `bird.takeOff(scaredBy)`.
+- **Cats:** `Cats` of `Cat`. They sit, groom, loaf, stalk, pounce and flee from the dog. They turn in place before moving, via `cat.steer()`. `cat.pet()` returns false when the cat walks off.
 
-`tryInteract` in `interaction.js` (E key or ✋ button) decides between feeding and petting. When both the dog and a cat are in reach, `nearestPettable` picks the closest.
+`Interaction` in `interaction.js` (E key or ✋ button) decides between feeding and petting in `tryInteract()`. When both the dog and a cat are in reach, `nearestPettable()` picks the closest and returns `{ kind, animal }`.
 
 ### Input and UI
 

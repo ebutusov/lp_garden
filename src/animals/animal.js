@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { solids, groundBlocked } from '../core/physics.js';
 import { Feature } from '../world/feature.js';
 
 // ---- Animal: the base class of the dog, the cats and the birds ----
@@ -18,16 +17,13 @@ const blobGeo = new THREE.IcosahedronGeometry(1, 0);
 
 export class Animal extends Feature {
   // `radius` > 0 gives the animal a collision circle `height` tall.
-  constructor(x, z, { radius = 0, height = 0, parent } = {}) {
-    super(x, z, parent);
+  constructor(ctx, { x = 0, z = 0, radius = 0, height = 0, parent } = {}) {
+    super(ctx, { x, z, parent });
     this.x = x;
     this.z = z;
     this.radius = radius;
     this.solid = null;
-    if (radius > 0) {
-      this.solid = { x, z, r: radius, h: height };
-      solids.push(this.solid);
-    }
+    if (radius > 0) this.solid = ctx.physics.addCircleSolid(x, z, radius, height);
   }
 
   // A body part: a blob scaled to (sx, sy, sz) at (x, y, z) inside `parent`.
@@ -43,7 +39,12 @@ export class Animal extends Feature {
   // Places this animal won't go (see groundBlocked in physics.js). Its own collision
   // circle doesn't count, or it would always be in its own way.
   blocked(x, z) {
-    return groundBlocked(x, z, this.radius, this.solid);
+    return this.ctx.physics.groundBlocked(x, z, this.radius, this.solid);
+  }
+
+  // Height of the ground it stands on at (x, z).
+  groundAt(x, z) {
+    return this.ctx.physics.surfaceHeightAt(x, z);
   }
 
   // "Feelers": probe a point `reach` ahead at each heading desired + offset, in the

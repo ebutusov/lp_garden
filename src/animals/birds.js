@@ -1,19 +1,11 @@
 import * as THREE from 'three';
-import { scene } from '../core/scene.js';
 import { mat } from '../core/materials.js';
 import { clamp } from '../core/random.js';
 import { cameraGroup } from '../core/camera.js';
 import { env } from '../core/state.js';
-import { surfaceHeightAt } from '../core/physics.js';
-import { trees } from '../world/trees.js';
-import { lanterns } from '../world/lanterns.js';
-import { torii } from '../world/torii.js';
-import { teaHouse } from '../world/teaHouse.js';
-import { fence } from '../world/fence.js';
 import { SFX, distVol } from '../audio/sfx.js';
 import { Feature } from '../world/feature.js';
 import { Animal } from './animal.js';
-import { dog } from './dog.js';
 
 // ---- Birds ----
 // Sparrows, Japanese white-eyes (mejiro) and a couple of crows fly between perches:
@@ -43,8 +35,8 @@ const bTmpA = new THREE.Vector3(), bTmpB = new THREE.Vector3(), bTmpC = new THRE
 
 // One bird: 'perched' (on a perch, or pecking on the grass) or 'flying' to its next perch.
 class Bird extends Animal {
-  constructor(species, flock) {
-    super(0, 0, { parent: flock.group });
+  constructor(ctx, { species, flock }) {
+    super(ctx, { parent: flock.group });
     this.species = species;
     this.sp = BIRD_SPECIES[species];
     this.flock = flock;
@@ -218,14 +210,15 @@ class Bird extends Animal {
 
 // The flock and the perches it shares. Every object that birds can sit on offers
 // its perches through a perches() method, so the flock doesn't need to know how a
-// lantern or a tree is built: it just asks each source.
+// lantern or a tree is built: it just asks each of its `perchSources`.
+// The birds flee the player, the `dog` and the cats.
 export class Birds extends Feature {
-  constructor(perchSources, dog) {
-    super();
+  constructor(ctx, { perchSources, dog }) {
+    super(ctx);
     this.dog = dog;
-    this.cats = null; // set once the cats exist (they're made after the birds; see cats.js)
+    this.cats = null; // set once the cats exist (they're made after the birds; see garden.js)
     // Make sure every object's world matrix is current before converting coordinates.
-    scene.updateMatrixWorld(true);
+    ctx.scene.updateMatrixWorld(true);
     const tmp = new THREE.Vector3();
     this.perches = perchSources.flatMap((source) => source.perches()).map((perch) => {
       perch.bird = null;
@@ -233,7 +226,7 @@ export class Birds extends Feature {
       return perch;
     });
     this.list = BIRD_FLOCK.map((species) => {
-      const b = new Bird(species, this);
+      const b = new Bird(ctx, { species, flock: this });
       const free = this.perches.filter((p) => !p.bird && (!b.sp.highOnly || p.high));
       b.land(free[Math.floor(Math.random() * free.length)]);
       b.group.rotation.y = Math.random() * Math.PI * 2;
@@ -247,7 +240,7 @@ export class Birds extends Feature {
       const a = Math.random() * Math.PI * 2, d = 8 + Math.random() * 32;
       const x = Math.cos(a) * d, z = Math.sin(a) * d;
       if (!this.dog.blocked(x, z)) {
-        return { parent: null, local: new THREE.Vector3(x, surfaceHeightAt(x, z), z), kind: 'grass', ground: true, high: false, bird: null };
+        return { parent: null, local: new THREE.Vector3(x, this.ctx.physics.surfaceHeightAt(x, z), z), kind: 'grass', ground: true, high: false, bird: null };
       }
     }
     return null;
@@ -257,4 +250,3 @@ export class Birds extends Feature {
     for (const b of this.list) b.update(dt, t);
   }
 }
-export const birds = new Birds([lanterns, trees, torii, teaHouse, fence], dog);

@@ -1,40 +1,41 @@
 import * as THREE from 'three';
 import { M, mat } from '../core/materials.js';
-import { rand } from '../core/random.js';
-import { POND_Z, POND_R, WATER_LEVEL, waterSurface } from '../core/layout.js';
+import { WATER_LEVEL, waterSurface } from '../core/layout.js';
 import { Feature } from './feature.js';
 import { makeWaterMaterial, makeWaterGeometry, addMirror } from './water.js';
 
 // ---- Pond with water ----
 // Everything in the pond lives in its group, centred on the pond, so its parts (and
 // the koi, ripples and food pellets) use simple pond-local coordinates: (0, 0) is the
-// middle of the pond. World z = local z + POND_Z.
-class Pond extends Feature {
-  constructor() {
-    super(0, POND_Z);
+// middle of the pond. World z = local z + the pond's z.
+export class Pond extends Feature {
+  constructor(ctx, { z, radius }) {
+    super(ctx, { z });
+    const { rand } = ctx;
+    this.radius = radius;
     // stone rim around the hole in the ground. A torus is a ring (doughnut); lying it flat
     // hides the seam between the ground's hole and the water.
-    this.mesh(new THREE.TorusGeometry(POND_R + 0.2, 0.6, 6, 28), M.stoneD, 0, -0.05, 0, { receive: true })
+    this.mesh(new THREE.TorusGeometry(radius + 0.2, 0.6, 6, 28), M.stoneD, 0, -0.05, 0, { receive: true })
       .rotation.x = -Math.PI / 2;
 
     // inner wall of the pond, so the hole doesn't look into the void. An open-ended
     // cylinder (no caps) drawn BackSide: from inside the pond you see its inner face.
     this.mesh(
-      new THREE.CylinderGeometry(POND_R, POND_R, 0.9, 28, 1, true),
+      new THREE.CylinderGeometry(radius, radius, 0.9, 28, 1, true),
       mat(0x55605a, { side: THREE.BackSide, roughness: 0.9 }),
       0, -0.45, 0,
     );
 
     // inner ground of the pond (darker)
-    this.mesh(new THREE.CircleGeometry(POND_R, 28), mat(0x3b5a52, { roughness: 0.9 }), 0, -0.9, 0)
+    this.mesh(new THREE.CircleGeometry(radius, 28), mat(0x3b5a52, { roughness: 0.9 }), 0, -0.9, 0)
       .rotation.x = -Math.PI / 2;
 
     // The water: a wavy, translucent surface with its own shader code (see water.js); the
     // floor and fish show through it. Transparent, so the renderer draws it after the
     // opaque objects and blends it over whatever is already behind.
-    const { material, uniforms } = makeWaterMaterial();
+    const { material, uniforms } = makeWaterMaterial(radius);
     this.waterUniforms = uniforms;
-    this.water = this.mesh(makeWaterGeometry(), material, 0, WATER_LEVEL, 0);
+    this.water = this.mesh(makeWaterGeometry(radius), material, 0, WATER_LEVEL, 0);
     addMirror(this.water, uniforms);
 
     // Lily pads. DoubleSide: visible from above and below (from under the water).
@@ -57,4 +58,3 @@ class Pond extends Feature {
     this.waterUniforms.uTime.value = t;
   }
 }
-export const pond = new Pond();

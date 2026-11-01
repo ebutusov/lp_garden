@@ -1,6 +1,5 @@
 import * as THREE from 'three';
-import { POND_R, waterSurface } from '../core/layout.js';
-import { pond } from './pond.js';
+import { waterSurface } from '../core/layout.js';
 import { Feature } from './feature.js';
 
 // ---- Ripples: expanding rings on the water (pond-local coordinates) ----
@@ -11,9 +10,10 @@ const RIPPLE_COUNT = 40;
 // All rings share one unit-radius ring geometry; each is sized with its scale.
 const rippleGeo = new THREE.RingGeometry(0.92, 1, 32).rotateX(-Math.PI / 2);
 
-class Ripples extends Feature {
-  constructor(pond) {
-    super(0, 0, pond.group); // inside the pond's group, so positions are pond-local
+export class Ripples extends Feature {
+  constructor(ctx, { pond }) {
+    super(ctx, { parent: pond.group }); // inside the pond's group, so positions are pond-local
+    this.pondR = pond.radius;
     this.rings = [];
     this.next = 0;
     for (let i = 0; i < RIPPLE_COUNT; i++) {
@@ -27,7 +27,7 @@ class Ripples extends Feature {
   }
 
   spawn(lx, lz, size = 1, life = 1.6) {
-    const d = Math.hypot(lx, lz), max = POND_R - 0.3;
+    const d = Math.hypot(lx, lz), max = this.pondR - 0.3;
     if (d > max) { lx *= max / d; lz *= max / d; }
     const r = this.rings[this.next]; // oldest ring gets reused
     this.next = (this.next + 1) % RIPPLE_COUNT;
@@ -49,4 +49,3 @@ class Ripples extends Feature {
     }
   }
 }
-export const ripples = new Ripples(pond);

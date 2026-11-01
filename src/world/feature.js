@@ -1,6 +1,4 @@
 import * as THREE from 'three';
-import { scene } from '../core/scene.js';
-import { addCircleSolid, addBoxSolid, platforms } from '../core/physics.js';
 
 // ---- Feature: the base class of every garden feature ----
 // A class bundles some data (fields on `this`) with the functions that work on it
@@ -15,11 +13,23 @@ import { addCircleSolid, addBoxSolid, platforms } from '../core/physics.js';
 // (dt: seconds since the last frame, t: seconds since the start). The base version does
 // nothing; static features keep it and animated ones override it. The same call works
 // on any feature, whatever it is: that is polymorphism.
+//
+// Dependency injection: a feature never reaches out for the world it lives in. Its
+// constructor is *given* everything it needs:
+//  - `ctx`, the shared context: { scene, physics, placement, rand }. The scene graph
+//    to add itself to, the colliders to register, where props may go, and the seeded
+//    random generator;
+//  - its options: where it stands, how big it is, and any other feature it works with
+//    (the ripples are handed the pond they ripple).
+// So reading a constructor call tells you exactly what a feature depends on, and
+// nothing happens until someone calls `new`. garden.js is the one place that does
+// (the "composition root"), in a deliberate order.
 const tmpV = new THREE.Vector3();
 
 export class Feature {
   // A subclass's constructor must call super(...) before it touches `this`.
-  constructor(x = 0, z = 0, parent = scene) {
+  constructor(ctx, { x = 0, z = 0, parent = ctx.scene } = {}) {
+    this.ctx = ctx;
     this.group = new THREE.Group();
     this.group.position.set(x, 0, z);
     parent.add(this.group);
@@ -46,19 +56,19 @@ export class Feature {
     return this.group.localToWorld(tmpV.set(lx, 0, lz));
   }
 
-  // Colliders and walkable surfaces, given in local coordinates (physics.js wants world
+  // Colliders and walkable surfaces, given in local coordinates (physics wants world
   // ones). Radii and heights are in world units. Boxes stay axis-aligned, so they only
   // suit groups that are moved but not turned.
   solidCircle(lx, lz, r, h) {
     const p = this.toWorld(lx, lz);
-    addCircleSolid(p.x, p.z, r, h);
+    return this.ctx.physics.addCircleSolid(p.x, p.z, r, h);
   }
   solidBox(minX, maxX, minZ, maxZ, h) {
     const { x, z } = this.toWorld(0, 0);
-    addBoxSolid(x + minX, x + maxX, z + minZ, z + maxZ, h);
+    return this.ctx.physics.addBoxSolid(x + minX, x + maxX, z + minZ, z + maxZ, h);
   }
   platform(minX, maxX, minZ, maxZ, y) {
     const { x, z } = this.toWorld(0, 0);
-    platforms.push({ minX: x + minX, maxX: x + maxX, minZ: z + minZ, maxZ: z + maxZ, y });
+    return this.ctx.physics.addPlatform(x + minX, x + maxX, z + minZ, z + maxZ, y);
   }
 }

@@ -1,9 +1,12 @@
-import { interaction } from '../animals/interaction.js';
-import { feeding } from '../animals/feeding.js';
 import { touch } from '../input/touch.js';
 
 // ---- Action hint ("Press E to pet the dog") ----
 const hintEl = document.getElementById('hint');
+// What the E key would do: handed over by main.js.
+let interaction, feeding;
+export function initHint(deps) {
+  ({ interaction, feeding } = deps);
+}
 export function updateHint() {
   const pet = interaction.nearestPettable();
   const action = pet ? `pet the ${pet.kind}`

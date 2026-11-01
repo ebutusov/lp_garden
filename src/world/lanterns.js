@@ -1,19 +1,17 @@
 import * as THREE from 'three';
 import { M } from '../core/materials.js';
-import { LANTERN_SPOTS, PATH_LANTERN_SPOTS, PATH_LANTERN_SCALE, PATH_LANTERN_GLOW } from '../core/layout.js';
 import { Feature } from './feature.js';
 
 // ---- Stone Lantern (Tōrō) ----
-// Each lantern is its own object with its own glow and flicker. Static fields belong to
-// the class rather than to any one lantern: `brightness` is set once by day/night (see
-// dayNight.js) and every lantern scales it by its own glow.
+// Each lantern is its own object with its own glow and flicker. A static field belongs
+// to the class rather than to any one lantern: BASE_INTENSITY is a constant shared by
+// every lantern (and by day/night).
 export class Lantern extends Feature {
   static BASE_INTENSITY = 8;
-  static brightness = Lantern.BASE_INTENSITY;
 
   // `glow` scales the light it gives off; `paperMat` is the material of its glowing box.
-  constructor(x, z, scale = 1, glow = 1, paperMat = M.paper, parent) {
-    super(x, z, parent);
+  constructor(ctx, { x, z, scale = 1, glow = 1, paperMat = M.paper, parent }) {
+    super(ctx, { x, z, parent });
     this.group.scale.setScalar(scale);
     this.glow = glow;
     this.mesh(new THREE.CylinderGeometry(0.5, 0.6, 0.5, 6), M.stoneD, 0, 0.25, 0, { cast: true });
@@ -37,20 +35,24 @@ export class Lantern extends Feature {
     return [{ parent: this.group, local: new THREE.Vector3(0, 3.1, 0), kind: 'lantern' }];
   }
 
-  // Glow pulse: a gentle flicker, out of step between lanterns (each object's unique id
-  // offsets its sine wave).
-  update(dt, t) {
-    this.light.intensity = Lantern.brightness * this.glow * (1 + Math.sin(t * 3 + this.group.id) * 0.25);
+  // Glow pulse around `brightness`: a gentle flicker, out of step between lanterns
+  // (each object's unique id offsets its sine wave).
+  flicker(t, brightness) {
+    this.light.intensity = brightness * this.glow * (1 + Math.sin(t * 3 + this.group.id) * 0.25);
   }
 }
 
-class Lanterns extends Feature {
-  constructor() {
-    super();
+// All the lanterns: full-size ones at `spots`, and smaller, dimmer ones (`pathScale`,
+// `pathGlow`) in pairs along the path at `pathSpots`. `brightness` is the shared light
+// level that day/night sets (see dayNight.js); every lantern scales it by its own glow.
+export class Lanterns extends Feature {
+  constructor(ctx, { spots, pathSpots, pathScale, pathGlow }) {
+    super(ctx);
+    this.brightness = Lantern.BASE_INTENSITY;
     this.list = [];
-    for (const [x, z] of LANTERN_SPOTS) this.list.push(new Lantern(x, z, 1, 1, M.paper, this.group));
-    for (const [x, z] of PATH_LANTERN_SPOTS) {
-      this.list.push(new Lantern(x, z, PATH_LANTERN_SCALE, PATH_LANTERN_GLOW, M.pathPaper, this.group));
+    for (const [x, z] of spots) this.list.push(new Lantern(ctx, { x, z, parent: this.group }));
+    for (const [x, z] of pathSpots) {
+      this.list.push(new Lantern(ctx, { x, z, scale: pathScale, glow: pathGlow, paperMat: M.pathPaper, parent: this.group }));
     }
   }
 
@@ -59,7 +61,6 @@ class Lanterns extends Feature {
   }
 
   update(dt, t) {
-    for (const l of this.list) l.update(dt, t);
+    for (const l of this.list) l.flicker(t, this.brightness);
   }
 }
-export const lanterns = new Lanterns();

@@ -5,11 +5,7 @@ import { hemi, sun } from '../core/lights.js';
 import { M } from '../core/materials.js';
 import { PATH_PAPER_GLOW } from '../core/layout.js';
 import { env } from '../core/state.js';
-import { sky } from '../world/sky.js';
-import { fuji } from '../world/fuji.js';
-import { clouds } from '../world/clouds.js';
 import { Lantern } from '../world/lanterns.js';
-import { teaHouse } from '../world/teaHouse.js';
 import { petalMat } from './petals.js';
 import { showToast } from '../ui/toast.js';
 
@@ -42,7 +38,13 @@ export function setNight(on) {
   dayNightBtn.innerHTML = `${on ? '☀️ Day' : '🌙 Night'} <kbd>N</kbd>`;
   showToast(on ? '🌙 Night' : '☀️ Day');
 }
-dayNightBtn.addEventListener('click', () => setNight(!env.isNight));
+
+// The features whose look changes, handed over by main.js.
+let sky, fuji, clouds, lanterns, teaHouse;
+export function initDayNight(features) {
+  ({ sky, fuji, clouds, lanterns, teaHouse } = features);
+  dayNightBtn.addEventListener('click', () => setNight(!env.isNight));
+}
 
 // Far things fade toward the horizon colour (aerial perspective, a cheap stand-in for
 // fog on objects beyond the fog's range): lit colour scaled down, horizon added as
@@ -76,7 +78,7 @@ export function updateDayNight(dt) {
   hemi.intensity = lerp(DAY.hemi, NIGHT.hemi);
   sun.color.lerpColors(DAY.sun, NIGHT.sun, m);
   sun.intensity = lerp(DAY.sunIntensity, NIGHT.sunIntensity);
-  Lantern.brightness = lerp(DAY.lantern, NIGHT.lantern);
+  lanterns.brightness = lerp(DAY.lantern, NIGHT.lantern);
   // Shared materials: one assignment changes every lantern's paper at once.
   M.paper.emissiveIntensity = lerp(DAY.paperGlow, NIGHT.paperGlow);
   M.pathPaper.emissiveIntensity = M.paper.emissiveIntensity * PATH_PAPER_GLOW;

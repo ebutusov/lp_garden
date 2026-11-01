@@ -2,9 +2,6 @@ import { camera, cameraGroup } from '../core/camera.js';
 import { player } from '../core/state.js';
 import { POND_Z, WATER_LEVEL, inPond } from '../core/layout.js';
 import { bridgeDeckTop, PLAYER_HEIGHT } from '../core/physics.js';
-import { teaHouse } from '../world/teaHouse.js';
-import { zenGarden } from '../world/zenGarden.js';
-import { ripples } from '../world/ripples.js';
 import { SFX } from '../audio/sfx.js';
 
 // ---- Head bob, footsteps and wading ----
@@ -13,6 +10,12 @@ import { SFX } from '../audio/sfx.js';
 const STRIDE = 1.7;  // distance per step
 let stepPhase = 0, bobAmp = 0, wasWading = false;
 let lastStepX = cameraGroup.position.x, lastStepZ = cameraGroup.position.z;
+// What the ground sounds like where (tea house floor, gravel), and the pond's ripples:
+// handed over by main.js.
+let teaHouse, zenGarden, ripples;
+export function initFootsteps(features) {
+  ({ teaHouse, zenGarden, ripples } = features);
+}
 function footstep(wading, p, feet) {
   if (wading) {
     ripples.spawn(p.x, p.z - POND_Z, 1.1, 1.5);

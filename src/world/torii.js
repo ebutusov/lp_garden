@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { M } from '../core/materials.js';
-import { TORII_Z } from '../core/layout.js';
 import { Feature } from './feature.js';
 
 // ---- Torii gate (entrance) ----
-class Torii extends Feature {
-  constructor() {
-    super(0, TORII_Z);
+// It stands across the x = 0 path, at `z`.
+export class Torii extends Feature {
+  constructor(ctx, { z }) {
+    super(ctx, { z });
     // One geometry, two meshes: geometry data is uploaded to the GPU once and drawn twice.
     const postGeo = new THREE.CylinderGeometry(0.5, 0.6, 7, 10);
     for (const x of [-5, 5]) {
@@ -23,4 +23,3 @@ class Torii extends Feature {
     return [-5.5, -2.75, 0, 2.75, 5.5].map((x) => ({ parent: this.group, local: new THREE.Vector3(x, 7.65, 0), kind: 'torii' }));
   }
 }
-export const torii = new Torii();

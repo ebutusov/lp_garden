@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { WIND_DIR, windStrength } from '../core/layout.js';
-import { FUJI_POS, FUJI_SUMMIT } from './fuji.js';
 import { Feature } from './feature.js';
 
 // ---- Clouds ----
@@ -11,9 +10,11 @@ const cloudGeo = new THREE.IcosahedronGeometry(1, 1);
 // Sky clouds drift with the wind and wrap around to the far side.
 const CLOUD_FIELD_R = 380;
 
-class Clouds extends Feature {
-  constructor() {
-    super();
+// `fuji` is the mountain that wears the belt and cap clouds.
+export class Clouds extends Feature {
+  constructor(ctx, { fuji }) {
+    super(ctx);
+    const { position: foot, summit } = fuji;
     this.material = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 1, fog: false });
     this.fujiMaterial = this.material.clone(); // further away, so hazier
 
@@ -27,19 +28,19 @@ class Clouds extends Feature {
 
     // Fuji's cloud belt across its shoulder, and the lens-shaped cap cloud above the summit.
     this.fujiClouds = [];
-    const toGarden = Math.atan2(-FUJI_POS.x, -FUJI_POS.z);
+    const toGarden = Math.atan2(-foot.x, -foot.z);
     // Either side of the face toward the garden, leaving the summit and snow in view.
     for (const off of [-1.15, -0.5, 0.55, 1.2]) {
       const a = toGarden + off;
       const cloud = this.makeCloud(7 + Math.random() * 3, 2.2, this.fujiMaterial);
-      cloud.position.set(FUJI_POS.x + Math.sin(a) * 40, 28 + Math.random() * 6, FUJI_POS.z + Math.cos(a) * 40);
+      cloud.position.set(foot.x + Math.sin(a) * 40, 28 + Math.random() * 6, foot.z + Math.cos(a) * 40);
       cloud.rotation.y = a + Math.PI / 2; // stretched along the mountain's flank
       cloud.userData.base = cloud.position.clone();
       cloud.userData.phase = Math.random() * Math.PI * 2;
       this.fujiClouds.push(cloud);
     }
-    for (const [ry, sx, sz] of [[FUJI_SUMMIT + 9, 30, 26], [FUJI_SUMMIT + 12, 22, 19], [FUJI_SUMMIT + 14.5, 13, 11]]) {
-      this.mesh(cloudGeo, this.fujiMaterial, FUJI_POS.x, ry, FUJI_POS.z).scale.set(sx, 2.2, sz);
+    for (const [ry, sx, sz] of [[summit + 9, 30, 26], [summit + 12, 22, 19], [summit + 14.5, 13, 11]]) {
+      this.mesh(cloudGeo, this.fujiMaterial, foot.x, ry, foot.z).scale.set(sx, 2.2, sz);
     }
   }
 
@@ -79,4 +80,3 @@ class Clouds extends Feature {
     }
   }
 }
-export const clouds = new Clouds();

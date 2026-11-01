@@ -3,10 +3,9 @@ import { mat } from '../core/materials.js';
 import { clamp } from '../core/random.js';
 import { cameraGroup } from '../core/camera.js';
 import { player } from '../core/state.js';
-import { surfaceHeightAt, PLAYER_HEIGHT } from '../core/physics.js';
+import { PLAYER_HEIGHT } from '../core/physics.js';
 import { SFX, distVol } from '../audio/sfx.js';
 import { Animal } from './animal.js';
-import { hearts } from './hearts.js';
 
 // ---- A friendly Shiba Inu ----
 // Wanders between random spots, stops to sit or sniff, greets and follows the player,
@@ -23,8 +22,9 @@ export class Dog extends Animal {
   static R = 0.45;    // collision radius
   static PET_R = 3;   // petting reach
 
-  constructor(hearts, x = 7, z = 38) {
-    super(x, z, { radius: Dog.R, height: 1.2 }); // so the player can't walk through it
+  // It starts at (x, z), or somewhere else if that's blocked. `hearts` shows its joy.
+  constructor(ctx, { hearts, x = 7, z = 38 }) {
+    super(ctx, { x, z, radius: Dog.R, height: 1.2 }); // so the player can't walk through it
     this.hearts = hearts;
     this.build();
     this.heading = Math.PI;
@@ -195,7 +195,7 @@ export class Dog extends Animal {
     this.phase += this.speed * dt * 6;
     const swing = Math.sin(this.phase) * 0.55 * moving * (1 - sit);
     const hipY = 0.52 + (0.24 - 0.52) * sit;
-    this.group.position.set(this.x, surfaceHeightAt(this.x, this.z), this.z);
+    this.group.position.set(this.x, this.groundAt(this.x, this.z), this.z);
     this.group.rotation.y = this.heading;
     this.torso.position.y = hipY + Math.abs(Math.sin(this.phase)) * 0.03 * moving;
     this.torso.rotation.x = -0.55 * sit;                       // sitting tips the body up
@@ -219,4 +219,3 @@ export class Dog extends Animal {
     this.tail.rotation.y = Math.sin(t * (excited ? 16 : 6)) * (this.happy > 0 ? 0.6 : excited ? 0.4 : 0.2);
   }
 }
-export const dog = new Dog(hearts);

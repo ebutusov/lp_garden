@@ -23,8 +23,8 @@ const HEART_COUNT = 3, HEART_LIFE = 1.4;
 // A small pool of camera-facing sprites, reused round-robin (like the ripples).
 // The group stays at the world origin, so a sprite's position is its world position.
 export class Hearts extends Feature {
-  constructor(parent) {
-    super(0, 0, parent);
+  constructor(ctx) {
+    super(ctx);
     const tex = makeHeartTexture();
     this.pool = Array.from({ length: HEART_COUNT }, () => {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
@@ -58,4 +58,3 @@ export class Hearts extends Feature {
     }
   }
 }
-export const hearts = new Hearts();
