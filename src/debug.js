@@ -1,14 +1,15 @@
 import * as THREE from 'three';
-import { scene } from './core/scene.js';
 import { cameraGroup } from './core/camera.js';
 import { M } from './core/materials.js';
 import { env, player } from './core/state.js';
 import { solids, mounds } from './core/physics.js';
-import { trees, cherryCrowns } from './world/trees.js';
+import { trees } from './world/trees.js';
 import { lanterns } from './world/lanterns.js';
-import { pondGroup } from './world/pond.js';
+import { pond } from './world/pond.js';
 import { torii } from './world/torii.js';
 import { teaHouse } from './world/teaHouse.js';
+import { flowers } from './world/flowers.js';
+import { steppingStones } from './world/steppingStones.js';
 import { setNight } from './effects/dayNight.js';
 import { setSound } from './audio/audio.js';
 import { koi } from './animals/koi.js';
@@ -26,7 +27,7 @@ import { setHelpVisible } from './ui/help.js';
 //   garden.setView({ x: 0, y: 12, z: 10, yaw: 0, pitch: -0.8, fly: true })
 window.garden = {
   // What actually got placed (trees that found no room are skipped).
-  layout: { trees: trees.length, cherries: cherryCrowns.length, lanterns: lanterns.length },
+  layout: { trees: trees.list.length, cherries: trees.cherryCrowns.length, lanterns: lanterns.list.length },
   // Jump the camera to an exact viewpoint.
   setView({ x, y, z, yaw: newYaw, pitch: newPitch, fly } = {}) {
     if (fly !== undefined) player.flyMode = fly;
@@ -67,7 +68,7 @@ window.garden = {
   birds: () => birds.map((b) => {
     const { x, y, z } = b.root.position;
     const parent = b.perch.ground ? 'grass' : b.perch.parent === null ? 'fence'
-      : lanterns.includes(b.perch.parent) ? 'lantern' : b.perch.parent === torii ? 'torii'
+      : lanterns.list.some((l) => l.group === b.perch.parent) ? 'lantern' : b.perch.parent === torii.group ? 'torii'
       : b.perch.parent === teaHouse.group ? 'tea house' : 'tree';
     return { species: b.species, state: b.state, on: parent, x, y, z };
   }),
@@ -85,15 +86,15 @@ window.garden = {
       mounds: mounds.map((m) => [r(m.x), r(m.z), r(m.r)]),
       solids: solids.filter((s) => !isDogSolid(s) && !animalSolids.has(s)).map((s) => (s.r !== undefined
         ? [r(s.x), r(s.z), r(s.r), r(s.h)] : [r(s.minX), r(s.maxX), r(s.minZ), r(s.maxZ), r(s.h)])),
-      trees: trees.map((tr) => {
+      trees: trees.list.map((tr) => {
         const g = tr.crown.parent;
         return [r(g.position.x), r(g.position.z), r(g.scale.x), r(g.rotation.y),
           tr.crown.children.map((c) => [r(c.position.x), r(c.position.y), r(c.position.z)])];
       }),
-      flowers: scene.children.filter((o) => o.material === M.flower).map((o) => [r(o.position.x), r(o.position.z)]),
-      stones: scene.children.filter((o) => o.material === M.stone && o.geometry.type === 'CylinderGeometry')
+      flowers: flowers.group.children.filter((o) => o.material === M.flower).map((o) => [r(o.position.x), r(o.position.z)]),
+      stones: steppingStones.group.children.filter((o) => o.material === M.stone && o.geometry.type === 'CylinderGeometry')
         .map((o) => [r(o.position.x), r(o.position.z), r(o.rotation.y), r(o.geometry.parameters.radiusTop)]),
-      pads: pondGroup.children.filter((o) => o.geometry?.type === 'CircleGeometry' && o.material.side === THREE.DoubleSide)
+      pads: pond.group.children.filter((o) => o.geometry?.type === 'CircleGeometry' && o.material.side === THREE.DoubleSide)
         .map((o) => [r(o.position.x), r(o.position.z), r(o.rotation.z)]),
       koi: koi.map((k) => [r(k.scale.x), r(k.userData.radius), k.children.length]),
     };

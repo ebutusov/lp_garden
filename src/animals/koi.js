@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { mat } from '../core/materials.js';
 import { rand, clamp } from '../core/random.js';
 import { POND_Z, POND_R } from '../core/layout.js';
-import { pondGroup } from '../world/pond.js';
-import { spawnRipple } from '../world/ripples.js';
+import { pond } from '../world/pond.js';
+import { ripples } from '../world/ripples.js';
 import { SFX, distVol } from '../audio/sfx.js';
 import { pellets, nearestPellet, removePellet } from './feeding.js';
 
@@ -100,7 +100,7 @@ for (let i = 0; i < 7; i++) {
     offset: rand() * Math.PI * 2,
     rippleCooldown: rand() * 3,
   });
-  pondGroup.add(fish);
+  pond.group.add(fish);
   koi.push(fish);
 }
 
@@ -180,13 +180,13 @@ export function updateKoi(dt, t) {
     // Mouth reach: the food just needs to be at the fish's nose, not its centre.
     if (food && pellets.includes(food) && Math.hypot(food.x - d.x, food.z - d.z) < d.r + 0.3) {
       removePellet(food);
-      spawnRipple(food.x, food.z, 0.6, 1.2);
+      ripples.spawn(food.x, food.z, 0.6, 1.2);
       SFX.plop(0.6 * distVol(food.x, food.z + POND_Z, 30));
     }
     // A sharp turn, or now and then a nose at the surface, ripples the water.
     d.rippleCooldown -= dt;
     if (d.rippleCooldown <= 0 && (Math.abs(d.turn) > 1.2 || Math.random() < 0.15 * dt)) {
-      spawnRipple(d.x, d.z, 0.8, 1.4);
+      ripples.spawn(d.x, d.z, 0.8, 1.4);
       d.rippleCooldown = 2 + Math.random() * 3;
     }
 
