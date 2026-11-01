@@ -1,6 +1,8 @@
 # 日本の庭園 · Japanese Garden
 
-A low-poly Japanese garden you can explore in the browser, on foot or flying. It runs on desktop and on phones and tablets. The whole thing is one HTML file built with [Three.js](https://threejs.org/), with no build step or dependencies to install.
+A low-poly Japanese garden you can explore in the browser, on foot or flying. It runs on desktop and on phones and tablets. It's built with [Three.js](https://threejs.org/) and bundled with [Vite](https://vite.dev/).
+
+The source is commented as a guided tour of 3D programming. It covers the scene graph and pivots, cameras, lights and shadow maps, materials and flat shading, custom shaders, particles, instancing, post-processing bloom, collision, steering and procedural animation.
 
 ## What's in the garden
 
@@ -23,17 +25,18 @@ A low-poly Japanese garden you can explore in the browser, on foot or flying. It
 
 ## Running it
 
-Browsers won't load the page's JavaScript modules from a file opened directly from disk, so serve the folder with any local web server, for example:
+You need [Node.js](https://nodejs.org/). Then:
 
 ```
-python -m http.server 8765 --bind 127.0.0.1
+npm install
+npm run dev
 ```
 
-Then open http://127.0.0.1:8765/ in your browser.
+Then open the address Vite prints, usually http://localhost:5173/. The page reloads as you edit the source.
 
-You need an internet connection, because Three.js loads from unpkg.
+To build a static copy for hosting, run `npm run build`. It writes the site to `dist/`, with Three.js bundled in, so it needs no internet connection. You can host that folder anywhere, or try it locally with `npm run preview`.
 
-The layout of trees, rocks and lanterns comes from a seed, so the garden looks the same on every visit. Add `?seed=N` to the address for a different arrangement, for example `?seed=7`. The same seed always gives the same garden.
+The layout of trees, rocks and lanterns comes from a fixed random seed, so the garden looks the same on every visit.
 
 ## Controls
 
@@ -53,6 +56,18 @@ Click or tap the start screen to begin. You can reopen it any time with the **?*
 
 ## For developers
 
-Everything is in `index.html`: the styles, the overlay markup and one JavaScript module. The module is split into sections marked with `// ---- Section ----` comments.
+`index.html` holds the overlay markup and `src/style.css` the styles. The code is in `src/`, one module per thing in the garden:
+
+| Folder | What's in it |
+|---|---|
+| `src/core/` | Scene, camera, renderer and bloom, lights, materials, layout constants, placement and physics |
+| `src/world/` | The garden's features, one per file: pond, trees, lanterns, bridge, tea house, Fuji, sky and so on |
+| `src/effects/` | Petals, fireflies and the day/night fade |
+| `src/animals/` | Koi, the dog, birds and cats, plus feeding and petting |
+| `src/player/` | Looking, walking and flying, and footsteps |
+| `src/input/`, `src/ui/` | Keyboard, mouse and touch controls; HUD, help screen, compass |
+| `src/audio/` | Synthesised sound effects |
+
+`src/main.js` imports everything and runs the animation loop. Start reading there.
 
 The browser console has a `window.garden` object for testing and screenshots. For example, `garden.setView({ x: 0, y: 12, z: 10, pitch: -0.8, fly: true })` moves the camera, and `garden.setNight(true, true)` switches to night instantly. It can also feed the koi, pet animals and report where the animals are. See [CLAUDE.md](CLAUDE.md) for the architecture notes.
