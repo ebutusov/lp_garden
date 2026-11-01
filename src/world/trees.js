@@ -41,6 +41,10 @@ class Tree extends Feature {
     this.crown.rotation.x = this.lz * s;
     this.crown.rotation.z = -this.lx * s;
   }
+
+  // Bird perches. Perches are points in a parent's LOCAL coordinates, so a bird sitting
+  // in the crown sways along with it. Each subclass knows where its own top is.
+  perches() { return []; }
 }
 
 class PineTree extends Tree {
@@ -59,6 +63,13 @@ class PineTree extends Tree {
       this.mesh(new THREE.ConeGeometry(2.4 - t * 1.4, 2.2, 7), i % 2 === 0 ? M.pine : M.pineD,
         0, i * 1.5, 0, { cast: true, parent: this.crown });
     }
+  }
+
+  // The tip of the top cone.
+  perches() {
+    const top = this.crown.children.reduce((a, b) => (a.position.y > b.position.y ? a : b));
+    const y = top.position.y + top.geometry.parameters.height / 2 - 0.05;
+    return [{ parent: this.crown, local: new THREE.Vector3(0, y, 0), kind: 'tree' }];
   }
 }
 
@@ -79,6 +90,13 @@ class BlobTree extends Tree {
         { cast: true, parent: this.crown },
       );
     }
+  }
+
+  // The tops of the two highest blobs.
+  perches() {
+    const top = (c) => c.position.y + c.geometry.parameters.radius * 0.8;
+    return [...this.crown.children].sort((a, b) => top(b) - top(a)).slice(0, 2)
+      .map((c) => ({ parent: this.crown, local: new THREE.Vector3(c.position.x, top(c), c.position.z), kind: 'tree' }));
   }
 }
 class MapleTree extends BlobTree {
@@ -128,6 +146,10 @@ class Trees extends Feature {
       this.list.push(new TreeType(spot.x, spot.z, scale, this.group));
       if (TreeType === CherryTree) this.cherryCrowns.push({ x: spot.x, y: 3.9 * scale, z: spot.z, r: 2 * scale });
     });
+  }
+
+  perches() {
+    return this.list.flatMap((tree) => tree.perches());
   }
 
   update(dt, t) {

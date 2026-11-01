@@ -51,5 +51,15 @@ class Fence extends Feature {
       this.mesh(new THREE.CylinderGeometry(0.2, 0.24, 2.6, 8), M.darkWood, p.x, 1.3, p.z, { cast: true });
     }
   }
+
+  // Ten bird perches at random spots along the top rail, away from the gateway. The
+  // fence never moves, so these are plain world positions (no parent).
+  perches() {
+    const gapA = Math.asin(FENCE_GAP / FENCE_R);
+    return Array.from({ length: 10 }, () => {
+      const a = gapA + 0.1 + (Math.PI * 2 - 2 * gapA - 0.2) * Math.random();
+      return { parent: null, local: new THREE.Vector3(FENCE_R * Math.sin(a), 1.65, FENCE_R * Math.cos(a)), kind: 'fence' };
+    });
+  }
 }
 export const fence = new Fence();

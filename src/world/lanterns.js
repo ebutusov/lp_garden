@@ -32,6 +32,11 @@ export class Lantern extends Feature {
     this.solidCircle(0, 0, 0.6 * scale, 3.1 * scale);
   }
 
+  // Birds perch on the roof tip.
+  perches() {
+    return [{ parent: this.group, local: new THREE.Vector3(0, 3.1, 0), kind: 'lantern' }];
+  }
+
   // Glow pulse: a gentle flicker, out of step between lanterns (each object's unique id
   // offsets its sine wave).
   update(dt, t) {
@@ -47,6 +52,10 @@ class Lanterns extends Feature {
     for (const [x, z] of PATH_LANTERN_SPOTS) {
       this.list.push(new Lantern(x, z, PATH_LANTERN_SCALE, PATH_LANTERN_GLOW, M.pathPaper, this.group));
     }
+  }
+
+  perches() {
+    return this.list.flatMap((l) => l.perches());
   }
 
   update(dt, t) {

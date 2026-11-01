@@ -54,6 +54,11 @@ class TeaHouse extends Feature {
     return this.mesh(new THREE.BoxGeometry(w, h, d), m, x, y, z, { cast: true, receive: true });
   }
 
+  // A bird perch on the roof peak.
+  perches() {
+    return [{ parent: this.group, local: new THREE.Vector3(0, TOP + 2.6, 0), kind: 'tea house' }];
+  }
+
   // Is the point (x, z) inside the house? (For footstep sounds.)
   contains(x, z) {
     return Math.abs(x - TEA.x) <= 4 && Math.abs(z - TEA.z) <= 3.5;

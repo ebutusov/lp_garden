@@ -3,7 +3,7 @@ import { clampPitch } from '../player/look.js';
 import { toggleFly } from '../player/flight.js';
 import { setNight } from '../effects/dayNight.js';
 import { sound, setSound } from '../audio/audio.js';
-import { tryInteract } from '../animals/interaction.js';
+import { interaction } from '../animals/interaction.js';
 import { helpVisible, showHelp, hideHelp } from '../ui/help.js';
 import { keys } from './keys.js';
 import { touch } from './touch.js';
@@ -17,7 +17,7 @@ document.addEventListener('keydown', (e) => {
   if (k === 'f') { if (!e.repeat) toggleFly(); }
   else if (k === 'n') { if (!e.repeat) setNight(!env.isNight); }
   else if (k === 'm') { if (!e.repeat) setSound(!sound.on); }
-  else if (k === 'e') { if (!e.repeat) tryInteract(); }
+  else if (k === 'e') { if (!e.repeat) interaction.tryInteract(); }
   else if (k === 'h') {
     if (e.repeat) return;
     if (!helpVisible()) showHelp();

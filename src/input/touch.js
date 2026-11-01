@@ -2,7 +2,7 @@ import { renderer } from '../core/renderer.js';
 import { player } from '../core/state.js';
 import { clampPitch } from '../player/look.js';
 import { toggleFly } from '../player/flight.js';
-import { tryInteract } from '../animals/interaction.js';
+import { interaction } from '../animals/interaction.js';
 import { hideHelp, overlay } from '../ui/help.js';
 import { keys } from './keys.js';
 
@@ -79,7 +79,7 @@ for (const btn of touchUI.querySelectorAll('[data-act]')) {
     e.preventDefault();
     if (HELD_KEY[act]) keys[HELD_KEY[act]] = true;
     else if (act === 'fly') toggleFly();
-    else if (act === 'interact') tryInteract();
+    else if (act === 'interact') interaction.tryInteract();
   });
   if (HELD_KEY[act]) {
     for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) {

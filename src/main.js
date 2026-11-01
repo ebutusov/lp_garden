@@ -26,7 +26,7 @@ import { trees } from './world/trees.js';
 import { lanterns } from './world/lanterns.js';
 import { pond } from './world/pond.js';
 import { ripples } from './world/ripples.js';
-import { updateKoi } from './animals/koi.js';
+import { koi } from './animals/koi.js';
 import './world/bridge.js';
 import './world/torii.js';
 import './world/steppingStones.js';
@@ -44,11 +44,11 @@ import { updateFireflies } from './effects/fireflies.js';
 import { updateDayNight } from './effects/dayNight.js';
 
 // Animals: after every solid is in place.
-import { updatePellets } from './animals/feeding.js';
-import { updateDog } from './animals/dog.js';
-import { updateHearts } from './animals/hearts.js';
-import { updateBirds } from './animals/birds.js';
-import { cats, updateCats } from './animals/cats.js';
+import { feeding } from './animals/feeding.js';
+import { dog } from './animals/dog.js';
+import { hearts } from './animals/hearts.js';
+import { birds } from './animals/birds.js';
+import { cats } from './animals/cats.js';
 
 // The player, input and UI.
 import { updateLook } from './player/look.js';
@@ -82,16 +82,16 @@ function animate() {
   sky.update(dt, t); // moves the sky, stars and moon with the player
 
   pond.update(dt, t);
-  updateKoi(dt, t);
-  updatePellets(dt, t);
+  koi.update(dt, t);
+  feeding.update(dt, t);
   ripples.update(dt, t);
   trees.update(dt, t);
   updatePetals(dt, t);
   shishi.update(dt, t);
-  updateDog(dt, t);
-  updateHearts(dt);
-  updateBirds(dt, t, cats);
-  updateCats(dt, t);
+  dog.update(dt, t);
+  hearts.update(dt);
+  birds.update(dt, t);
+  cats.update(dt, t);
   teaThings.update(dt, t);
   updateFireflies(t);
   clouds.update(dt, t);
