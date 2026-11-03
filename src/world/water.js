@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { POND_R } from '../core/layout.js';
 
 // ---- Pond water: a lit material with custom shader code patched in ----
 // Writing a whole ShaderMaterial (like the sky) means redoing lighting, fog and
@@ -35,7 +34,7 @@ const WAVE_GLSL = /* glsl */`
   }
 `;
 
-export function makeWaterMaterial() {
+export function makeWaterMaterial(radius) {
   const material = new THREE.MeshStandardMaterial({
     color: 0x2f8ea0, roughness: 0.12, metalness: 0.1, flatShading: true, transparent: true,
   });
@@ -70,7 +69,7 @@ export function makeWaterMaterial() {
       .replace('#include <clipping_planes_fragment>', /* glsl */`
         #include <clipping_planes_fragment>
         float pondR = length(vPondPos);
-        if (pondR > ${POND_R.toFixed(2)}) discard;
+        if (pondR > ${radius.toFixed(2)}) discard;
       `)
       // Runs after lighting (outgoingLight is the lit colour) and before fog.
       .replace('#include <opaque_fragment>', /* glsl */`
@@ -92,7 +91,7 @@ export function makeWaterMaterial() {
         vec3 mirror = texture2DProj(uMirror, mirrorCoord).rgb;
         outgoingLight = mix(outgoingLight, mirror, fresnel * 0.85);
         // Shallows along the rim: paler, and harder to see through.
-        float shore = smoothstep(${(POND_R - 1.4).toFixed(2)}, ${(POND_R - 0.3).toFixed(2)}, pondR);
+        float shore = smoothstep(${(radius - 1.4).toFixed(2)}, ${(radius - 0.3).toFixed(2)}, pondR);
         outgoingLight = mix(outgoingLight, outgoingLight * 1.6 + vec3(0.04, 0.06, 0.06), shore * 0.5);
         // Clear from above, opaque at a glance.
         diffuseColor.a = mix(0.42, 0.95, max(fresnel, shore * 0.6));
@@ -202,8 +201,8 @@ export function addMirror(mesh, uniforms) {
 // A square grid wide enough to cover the pond, lying flat. Its inner vertices are
 // nudged by a fixed pattern (not rand(), which would shift the garden's layout), so
 // the facets come out as uneven triangles rather than a regular grid.
-export function makeWaterGeometry() {
-  const size = POND_R * 2 + 1, segs = 22;
+export function makeWaterGeometry(radius) {
+  const size = radius * 2 + 1, segs = 22;
   const geo = new THREE.PlaneGeometry(size, size, segs, segs).rotateX(-Math.PI / 2);
   const pos = geo.attributes.position, cell = size / segs;
   for (let i = 0; i < pos.count; i++) {

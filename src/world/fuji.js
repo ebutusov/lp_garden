@@ -7,13 +7,12 @@ import { Feature } from './feature.js';
 // toward the horizon colour (aerial perspective, see applyHaze in dayNight.js) and
 // its foot sits in a bank of mist. Clouds drift across the sky (clouds.js), and Fuji
 // wears a cloud belt and its famous lens-shaped "hat" cloud.
-export const FUJI_POS = new THREE.Vector3(-90, -2, -250);
 // (radius, height) from the foot up to the crater rim, then into the crater.
 const FUJI_PROFILE = [
   [125, 0], [100, 4], [78, 10], [58, 18], [42, 28], [30, 39], [21, 50],
   [14, 60], [10, 67], [8.5, 70], [6, 68.5], [0.1, 67.5],
 ];
-export const FUJI_SUMMIT = 70;
+const FUJI_SUMMIT = 70;
 
 // Soft horizontal smudge for mist banks.
 function makeMistTexture() {
@@ -30,10 +29,14 @@ function makeMistTexture() {
   return new THREE.CanvasTexture(c);
 }
 
-class Fuji extends Feature {
-  constructor() {
-    super(FUJI_POS.x, FUJI_POS.z);
-    this.group.position.y = FUJI_POS.y;
+// `position` is the mountain's foot, a Vector3: unlike the garden features, Fuji
+// stands below ground level.
+export class Fuji extends Feature {
+  constructor(ctx, { position }) {
+    super(ctx, { x: position.x, z: position.z });
+    this.group.position.y = position.y;
+    this.position = position;
+    this.summit = FUJI_SUMMIT;  // height of the crater rim above the foot
     // vertexColors: the colour comes from a per-vertex `color` attribute instead of one
     // colour for the whole mesh. fog: false, because the mountain is past the fog's far end.
     this.material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9, fog: false });
@@ -92,7 +95,8 @@ class Fuji extends Feature {
       map: makeMistTexture(), transparent: true, opacity: 0.7, depthWrite: false, fog: false,
     });
     // Two horizontal unit vectors: toward the garden, and across that direction.
-    const toGarden = new THREE.Vector3(-FUJI_POS.x, 0, -FUJI_POS.z).normalize();
+    const foot = this.position;
+    const toGarden = new THREE.Vector3(-foot.x, 0, -foot.z).normalize();
     const across = new THREE.Vector3(toGarden.z, 0, -toGarden.x);
     for (const row of [{ d: 95, y: 4, w: 70, h: 10 }, { d: 72, y: 1.5, w: 55, h: 6 }]) {
       for (let i = -7; i <= 7; i++) {
@@ -102,11 +106,10 @@ class Fuji extends Feature {
           .addScaledVector(toGarden, row.d + (Math.random() - 0.5) * 10)
           .addScaledVector(across, i * 18 + (Math.random() - 0.5) * 8);
         // A world height, so subtract the group's own height.
-        s.position.y = row.y + Math.random() * 3 - FUJI_POS.y;
+        s.position.y = row.y + Math.random() * 3 - foot.y;
         s.scale.set(row.w * (0.8 + Math.random() * 0.4), row.h, 1);
         this.group.add(s);
       }
     }
   }
 }
-export const fuji = new Fuji();

@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { M, mat } from '../core/materials.js';
 import { dotTex } from '../core/textures.js';
-import { teaHouse } from './teaHouse.js';
 import { Feature } from './feature.js';
 
 // ---- Tea things: a clay teapot and cups on the table, an iron kettle on a brazier ----
@@ -9,9 +8,9 @@ import { Feature } from './feature.js';
 // local frame, and moving the house would carry its furniture along.
 const STEAM_COUNT = 14, STEAM_LIFE = 2.5;
 
-class TeaThings extends Feature {
-  constructor(house) {
-    super(0, 0, house.group);
+export class TeaThings extends Feature {
+  constructor(ctx, { house }) {
+    super(ctx, { parent: house.group });
     const { floorY } = house;
     // Every part both casts and receives shadows.
     const part = (geo, m, x, y, z, parent = this.group) => this.mesh(geo, m, x, y, z, { cast: true, receive: true, parent });
@@ -104,4 +103,3 @@ class TeaThings extends Feature {
     this.steamGeo.attributes.color.needsUpdate = true;
   }
 }
-export const teaThings = new TeaThings(teaHouse);

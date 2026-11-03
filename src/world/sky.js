@@ -12,9 +12,9 @@ const STAR_COUNT = 1200;
 // Same direction as the sun light, so moonlit shadows fall away from the moon.
 const MOON_OFFSET = new THREE.Vector3(40, 60, 20).normalize().multiplyScalar(SKY_R - 20);
 
-class Sky extends Feature {
-  constructor() {
-    super();
+export class Sky extends Feature {
+  constructor(ctx) {
+    super(ctx);
     // Uniforms are values passed from JavaScript to the shader, the same for every pixel
     // in a draw. Changing `.value` here recolours the sky on the next frame (day/night).
     this.uniforms = { top: { value: new THREE.Color() }, horizon: { value: new THREE.Color() } };
@@ -85,4 +85,3 @@ class Sky extends Feature {
     this.group.position.copy(cameraGroup.position);
   }
 }
-export const sky = new Sky();

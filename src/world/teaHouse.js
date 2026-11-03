@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { M } from '../core/materials.js';
-import { TEA } from '../core/layout.js';
 import { Feature } from './feature.js';
 
 // ---- Tea house (chashitsu) ----
@@ -9,9 +8,9 @@ import { Feature } from './feature.js';
 // Built entirely from boxes; all positions are local to the house's group.
 const FLOOR = 0.55, WALL = 2.8, BAND = 0.8, TOP = FLOOR + WALL + BAND;
 
-class TeaHouse extends Feature {
-  constructor() {
-    super(TEA.x, TEA.z);
+export class TeaHouse extends Feature {
+  constructor(ctx, { x, z }) {
+    super(ctx, { x, z });
     this.floorY = FLOOR;
     this.box(8, 0.5, 7, M.darkWood, 0, 0.25, 0);                // raised floor
     this.box(7.4, 0.05, 6.4, M.tatami, 0, 0.525, 0);            // tatami
@@ -54,9 +53,14 @@ class TeaHouse extends Feature {
     return this.mesh(new THREE.BoxGeometry(w, h, d), m, x, y, z, { cast: true, receive: true });
   }
 
+  // A bird perch on the roof peak.
+  perches() {
+    return [{ parent: this.group, local: new THREE.Vector3(0, TOP + 2.6, 0), kind: 'tea house' }];
+  }
+
   // Is the point (x, z) inside the house? (For footstep sounds.)
   contains(x, z) {
-    return Math.abs(x - TEA.x) <= 4 && Math.abs(z - TEA.z) <= 3.5;
+    const p = this.group.position;
+    return Math.abs(x - p.x) <= 4 && Math.abs(z - p.z) <= 3.5;
   }
 }
-export const teaHouse = new TeaHouse();

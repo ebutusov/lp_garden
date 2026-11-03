@@ -2,11 +2,10 @@ import * as THREE from 'three';
 import { scene } from '../core/scene.js';
 import { dotTex } from '../core/textures.js';
 import { POND_Z, WATER_LEVEL, WIND_DIR, windStrength, inPond } from '../core/layout.js';
-import { trees } from '../world/trees.js';
-import { ripples } from '../world/ripples.js';
 
 // ---- Falling cherry petals ----
-// Petals drop from the cherry crowns and drift with the wind.
+// Petals drop from the cherry crowns and drift with the wind. initPetals() is given the
+// trees to drop from and the ripples to make when a petal lands on the pond.
 // A particle system: 300 petals drawn as ONE THREE.Points object. Each petal is one
 // vertex whose position the CPU updates every frame, so 300 petals cost a single
 // draw call. (Separate meshes would cost 300.)
@@ -16,10 +15,10 @@ const petalPos = new Float32Array(petalCount * 3);
 const pColors = new Float32Array(petalCount * 3);
 const palette = [new THREE.Color(0xffc4d4), new THREE.Color(0xffa9c0), new THREE.Color(0xfbe0e8)];
 const petalData = [];
+let crowns = [], ripples = null;
 // Recycle a petal that reached the ground: put it back up in a random cherry crown.
 // (anyHeight scatters the very first batch at all heights so the air isn't empty at start.)
 function respawnPetal(i, anyHeight = false) {
-  const crowns = trees.cherryCrowns;
   if (!crowns.length) { petalPos[i * 3 + 1] = -100; return; }
   const c = crowns[Math.floor(Math.random() * crowns.length)];
   const a = Math.random() * Math.PI * 2, r = Math.random() * c.r;
@@ -28,7 +27,6 @@ function respawnPetal(i, anyHeight = false) {
   petalPos[i * 3 + 2] = c.z + Math.sin(a) * r;
 }
 for (let i = 0; i < petalCount; i++) {
-  respawnPetal(i, true);
   const col = palette[i % palette.length];
   pColors[i * 3] = col.r; pColors[i * 3 + 1] = col.g; pColors[i * 3 + 2] = col.b;
   petalData.push({
@@ -49,7 +47,13 @@ export const petalMat = new THREE.PointsMaterial({
 });
 const petalsMesh = new THREE.Points(petalGeo, petalMat);
 petalsMesh.frustumCulled = false; // positions change every frame
-scene.add(petalsMesh);
+
+export function initPetals({ trees, ripples: pondRipples }) {
+  crowns = trees.cherryCrowns;
+  ripples = pondRipples;
+  for (let i = 0; i < petalCount; i++) respawnPetal(i, true);
+  scene.add(petalsMesh);
+}
 
 export function updatePetals(dt, t) {
   const w = windStrength(t) * 1.2;

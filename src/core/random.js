@@ -6,15 +6,18 @@
 // every visit. Purely visual effects (petals, ripples, fireflies, the animals'
 // wandering) still use Math.random, since nobody notices if those differ.
 //
-// Because every placement draws from this one shared sequence, the ORDER in which
-// modules call rand() decides the layout. main.js imports the world modules in a
-// fixed order for exactly this reason.
+// main.js makes ONE generator from SEED and hands it to everything that places
+// things (see garden.js). Because every placement draws from that one shared sequence,
+// the ORDER in which they call rand() decides the layout, so garden.js builds the
+// garden in a fixed order.
 
-const SEED = 1;
+export const SEED = 1;
 
-// mulberry32: a tiny, fast 32-bit PRNG. Each call advances the state, scrambles it
+// mulberry32: a tiny, fast 32-bit PRNG. It returns a function, rand(), that carries
+// its own state in a closure, so two generators made from the same seed are
+// independent but produce identical sequences. Each call advances the state, scrambles it
 // with integer multiplies and xor-shifts, and maps the result into [0, 1).
-function mulberry32(a) {
+export function mulberry32(a) {
   return function () {
     a = (a + 0x6d2b79f5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
@@ -22,6 +25,5 @@ function mulberry32(a) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-export const rand = mulberry32(SEED);
 
 export const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));

@@ -1,8 +1,6 @@
 import * as THREE from 'three';
 import { M } from '../core/materials.js';
-import { rand } from '../core/random.js';
 import { WIND_DIR, windStrength } from '../core/layout.js';
-import { isClear, reserve } from '../core/placement.js';
 import { Feature } from './feature.js';
 
 // ---- Trees ----
@@ -16,8 +14,9 @@ import { Feature } from './feature.js';
 // each grow their own shape. Static fields hold numbers shared by every tree of a kind,
 // read through this.constructor (the subclass the tree was made from).
 class Tree extends Feature {
-  constructor(x, z, scale, parent) {
-    super(x, z, parent);
+  constructor(ctx, { x, z, scale, parent }) {
+    super(ctx, { x, z, parent });
+    const { rand } = ctx;
     // Scaling the group scales everything in it, trunk and crown alike.
     this.group.scale.setScalar(scale);
     this.crown = new THREE.Group();
@@ -41,6 +40,10 @@ class Tree extends Feature {
     this.crown.rotation.x = this.lz * s;
     this.crown.rotation.z = -this.lx * s;
   }
+
+  // Bird perches. Perches are points in a parent's LOCAL coordinates, so a bird sitting
+  // in the crown sways along with it. Each subclass knows where its own top is.
+  perches() { return []; }
 }
 
 class PineTree extends Tree {
@@ -60,6 +63,13 @@ class PineTree extends Tree {
         0, i * 1.5, 0, { cast: true, parent: this.crown });
     }
   }
+
+  // The tip of the top cone.
+  perches() {
+    const top = this.crown.children.reduce((a, b) => (a.position.y > b.position.y ? a : b));
+    const y = top.position.y + top.geometry.parameters.height / 2 - 0.05;
+    return [{ parent: this.crown, local: new THREE.Vector3(0, y, 0), kind: 'tree' }];
+  }
 }
 
 // Rounded crown of low-poly blobs, used by maples and cherries, which differ only in
@@ -69,6 +79,7 @@ class BlobTree extends Tree {
   static SWAY = 0.06;
   build() {
     const { trunkMat, trunkH, mats, blobs, minR, spreadR, spreadY } = this.constructor.LOOK;
+    const { rand } = this.ctx;
     this.mesh(new THREE.CylinderGeometry(0.18, 0.32, trunkH, 6), trunkMat, 0, trunkH / 2, 0, { cast: true });
     this.crown.position.y = trunkH;
     for (let i = 0; i < blobs; i++) {
@@ -79,6 +90,13 @@ class BlobTree extends Tree {
         { cast: true, parent: this.crown },
       );
     }
+  }
+
+  // The tops of the two highest blobs.
+  perches() {
+    const top = (c) => c.position.y + c.geometry.parameters.radius * 0.8;
+    return [...this.crown.children].sort((a, b) => top(b) - top(a)).slice(0, 2)
+      .map((c) => ({ parent: this.crown, local: new THREE.Vector3(c.position.x, top(c), c.position.z), kind: 'tree' }));
   }
 }
 class MapleTree extends BlobTree {
@@ -91,17 +109,13 @@ class CherryTree extends BlobTree {
 }
 
 const TREE_TYPES = { pine: PineTree, maple: MapleTree, cherry: CherryTree };
-const treePositions = [
-  [14, 10], [-16, 6], [20, -14], [-22, -10], [10, -26],
-  [-12, 22], [26, 18], [-28, -22], [38, -16], [-36, 14],
-  [6, 32], [-6, -34], [18, 30], [-24, 26],
-  [30, 28], [-30, 30], [42, 10], [-40, -6], [-14, -30], [24, -30], [-34, -26], [0, -42],
-];
 
 // All the trees: picks their spots and species, and sways them every frame.
-class Trees extends Feature {
-  constructor() {
-    super();
+// `spots` are the planned positions, one tree each (22, one per species in the mix).
+export class Trees extends Feature {
+  constructor(ctx, { spots }) {
+    super(ctx);
+    const { rand, placement } = ctx;
     this.list = [];          // for wind sway and bird perches
     this.cherryCrowns = [];  // where petals fall from
     // A fixed mix of species, shuffled (Fisher–Yates), so every layout has cherries for the petals.
@@ -110,7 +124,7 @@ class Trees extends Feature {
       const j = Math.floor(rand() * (i + 1));
       [types[i], types[j]] = [types[j], types[i]];
     }
-    treePositions.forEach(([x, z], i) => {
+    spots.forEach(([x, z], i) => {
       const TreeType = TREE_TYPES[types[i]];
       const scale = 0.8 + rand() * 0.7;
       const canopy = TreeType.CANOPY_R * scale;
@@ -120,14 +134,18 @@ class Trees extends Feature {
         const jitter = 4 + k * 0.4;
         const tx = x + (rand() - 0.5) * jitter;
         const tz = z + (rand() - 0.5) * jitter;
-        if (isClear(tx, tz, canopy)) spot = { x: tx, z: tz };
+        if (placement.isClear(tx, tz, canopy)) spot = { x: tx, z: tz };
       }
       if (!spot) return;
       // Reserve less than the full canopy: neighbouring crowns may touch.
-      reserve(spot.x, spot.z, canopy * 0.75);
-      this.list.push(new TreeType(spot.x, spot.z, scale, this.group));
+      placement.reserve(spot.x, spot.z, canopy * 0.75);
+      this.list.push(new TreeType(ctx, { x: spot.x, z: spot.z, scale, parent: this.group }));
       if (TreeType === CherryTree) this.cherryCrowns.push({ x: spot.x, y: 3.9 * scale, z: spot.z, r: 2 * scale });
     });
+  }
+
+  perches() {
+    return this.list.flatMap((tree) => tree.perches());
   }
 
   update(dt, t) {
@@ -135,4 +153,3 @@ class Trees extends Feature {
     for (const tree of this.list) tree.sway(t, w);
   }
 }
-export const trees = new Trees();

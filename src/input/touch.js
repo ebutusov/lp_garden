@@ -2,7 +2,6 @@ import { renderer } from '../core/renderer.js';
 import { player } from '../core/state.js';
 import { clampPitch } from '../player/look.js';
 import { toggleFly } from '../player/flight.js';
-import { tryInteract } from '../animals/interaction.js';
 import { hideHelp, overlay } from '../ui/help.js';
 import { keys } from './keys.js';
 
@@ -71,19 +70,22 @@ const endLook = (e) => { if (e.pointerId === touch.lookId) touch.lookId = null; 
 canvasEl.addEventListener('pointerup', endLook);
 canvasEl.addEventListener('pointercancel', endLook);
 
-// Action buttons. Jump / down are held like the Space and C keys.
+// Action buttons. Jump / down are held like the Space and C keys; ✋ goes to
+// `interaction` (animals/interaction.js), which main.js hands over once it exists.
 const HELD_KEY = { jump: ' ', down: 'c' };
-for (const btn of touchUI.querySelectorAll('[data-act]')) {
-  const act = btn.dataset.act;
-  btn.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    if (HELD_KEY[act]) keys[HELD_KEY[act]] = true;
-    else if (act === 'fly') toggleFly();
-    else if (act === 'interact') tryInteract();
-  });
-  if (HELD_KEY[act]) {
-    for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) {
-      btn.addEventListener(ev, () => { keys[HELD_KEY[act]] = false; });
+export function setupTouch({ interaction }) {
+  for (const btn of touchUI.querySelectorAll('[data-act]')) {
+    const act = btn.dataset.act;
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (HELD_KEY[act]) keys[HELD_KEY[act]] = true;
+      else if (act === 'fly') toggleFly();
+      else if (act === 'interact') interaction.tryInteract();
+    });
+    if (HELD_KEY[act]) {
+      for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) {
+        btn.addEventListener(ev, () => { keys[HELD_KEY[act]] = false; });
+      }
     }
   }
 }

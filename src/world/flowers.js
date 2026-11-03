@@ -1,19 +1,17 @@
 import * as THREE from 'three';
 import { M } from '../core/materials.js';
-import { randomFreeSpot } from '../core/placement.js';
 import { Feature } from './feature.js';
 
 // ---- Flowerbeds (iris) ----
 // A 6×6-segment sphere on a 4-sided stem: about as few triangles as still reads as a flower.
-class Flowers extends Feature {
-  constructor() {
-    super();
+export class Flowers extends Feature {
+  constructor(ctx) {
+    super(ctx);
     for (let i = 0; i < 30; i++) {
-      const spot = randomFreeSpot(14, 39, 0.4);
+      const spot = ctx.placement.randomFreeSpot(14, 39, 0.4);
       if (!spot) continue;
       this.mesh(new THREE.SphereGeometry(0.28, 6, 6), M.flower, spot.x, 0.4, spot.z, { cast: true });
       this.mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.6, 4), M.pine, spot.x, 0.2, spot.z);
     }
   }
 }
-export const flowers = new Flowers();
