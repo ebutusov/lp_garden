@@ -9,23 +9,27 @@ import { Animal } from './animal.js';
 
 // ---- A friendly Shiba Inu ----
 // Wanders between random spots, stops to sit or sniff, greets and follows the player,
-// and can be petted. It keeps off the pond, bridge, gravel garden and tea house.
+// and can be petted. It keeps off the pond, bridge and tea house; on the raked
+// gravel it leaves paw prints.
+// The Gardener can pet it too, and then it trots after him for a while.
 const DOG_SPEED = { walk: 2.2, trot: 4.5 };
 const DOG_GREET_R = 8;                     // notices the player within this distance
 const DOG_GIVE_UP_R = 16;                  // stops following beyond this
 const DOG_SIT_DIST = 2;                    // how close it sits by the player
 
 // The dog is a small state machine: 'wander' to a waypoint, 'rest' (sit or sniff),
-// or 'follow' the player. Its logical state (x, z, heading, speed) is kept apart from
+// or 'follow' someone: the player, or a `leader` (anyone with x and z, e.g. the Gardener). Its logical state (x, z, heading, speed) is kept apart from
 // the meshes; the pose code at the end of update() turns that state into rotations.
 export class Dog extends Animal {
   static R = 0.45;    // collision radius
   static PET_R = 3;   // petting reach
 
-  // It starts at (x, z), or somewhere else if that's blocked. `hearts` shows its joy.
-  constructor(ctx, { hearts, x = 7, z = 38 }) {
+  // It starts at (x, z), or somewhere else if that's blocked. `hearts` shows its joy;
+  // `zenGarden` is the gravel it leaves paw prints in.
+  constructor(ctx, { hearts, zenGarden, x = 7, z = 38 }) {
     super(ctx, { x, z, radius: Dog.R, height: 1.2 }); // so the player can't walk through it
     this.hearts = hearts;
+    this.zenGarden = zenGarden;
     this.build();
     this.heading = Math.PI;
     this.speed = 0;
@@ -40,6 +44,9 @@ export class Dog extends Animal {
     this.stuck = 0;      // seconds spent bumping into something
     this.avoidSide = 1;  // which way it last swerved
     this.lookYaw = 0;
+    this.leader = null;  // whom it follows when not the player
+    this.followT = 0;    // seconds it keeps following the leader
+    this.watch = null;   // someone it sits watching while resting
     if (this.blocked(this.x, this.z)) Object.assign(this, this.pickWaypoint());
     this.syncSolid();
   }
@@ -104,40 +111,68 @@ export class Dog extends Animal {
     return { x: this.x, z: this.z };
   }
 
-  pet() {
+  // Petted by the player, or by `by` (the Gardener), whom it then follows for a while.
+  pet(by = null) {
     this.state = 'follow';
+    this.leader = by;
+    this.followT = 20 + Math.random() * 20;
+    this.watch = null;
     this.happy = 3;
     this.hearts.spawn(this.head);
     SFX.yip(distVol(this.x, this.z, 30));
+  }
+
+  // Someone (`by`, the Gardener) is coming over to pet it: sit and wait for them. Not
+  // while it's with the player, who comes first. False if it won't wait.
+  hold(by, seconds) {
+    if (this.state === 'follow' && !this.leader) return false;
+    this.timer = Math.max(this.state === 'rest' ? this.timer : 0, seconds);
+    this.state = 'rest';
+    this.restSit = true;
+    this.watch = by;
+    this.target = null;
+    return true;
   }
 
   update(dt, t) {
     const p = cameraGroup.position;
     const toPlayer = Math.hypot(p.x - this.x, p.z - this.z);
     const playerAround = !player.flyMode && p.y - PLAYER_HEIGHT < 3; // on (or near) the ground
+    const withPlayer = this.state === 'follow' && !this.leader;
     this.cooldown -= dt;
     this.happy = Math.max(0, this.happy - dt);
 
-    if (this.state !== 'follow' && playerAround && toPlayer < DOG_GREET_R && this.cooldown <= 0) {
+    // The player always wins: it leaves whatever it's doing (or whoever it's following).
+    if (!withPlayer && playerAround && toPlayer < DOG_GREET_R && this.cooldown <= 0) {
       this.state = 'follow';
+      this.leader = null;
+      this.watch = null;
       this.happy = 2;
       SFX.bark(distVol(this.x, this.z, 40));
-    } else if (this.state === 'follow' && (!playerAround || toPlayer > DOG_GIVE_UP_R)) {
+    } else if (withPlayer && (!playerAround || toPlayer > DOG_GIVE_UP_R)) {
       this.state = 'wander';
       this.target = null;
       this.cooldown = 12; // don't re-greet straight away
+    } else if (this.state === 'follow' && this.leader && (this.followT -= dt) <= 0) {
+      this.state = 'wander';
+      this.target = null;
+      this.leader = null;
     }
 
+    // Whom it's following, if anyone: the leader, or else the player.
+    const lead = this.state === 'follow' ? (this.leader ?? p) : null;
+    const toLead = lead ? Math.hypot(lead.x - this.x, lead.z - this.z) : Infinity;
     let goal = null, wantSpeed = 0, sitting = false;
     if (this.state === 'follow') {
-      // If the player is somewhere the dog won't go (wading, on the gravel, in the
-      // tea house), it sits at the edge and waits once it's reasonably close.
-      const waitAtEdge = this.blocked(p.x, p.z) && (toPlayer < 6 || this.stuck > 0.5);
+      // If they're somewhere the dog won't go (wading, in the tea house),
+      // it sits at the edge and waits once it's reasonably close. (A leader's own
+      // collision circle doesn't count as "somewhere it won't go".)
+      const waitAtEdge = this.blocked(lead.x, lead.z, lead.solid) && (toLead < 6 || this.stuck > 0.5);
       if (waitAtEdge) {
         sitting = true;
-      } else if (toPlayer > DOG_SIT_DIST + 0.6) {
-        goal = { x: p.x, z: p.z };
-        wantSpeed = toPlayer > 5 ? DOG_SPEED.trot : DOG_SPEED.walk;
+      } else if (toLead > DOG_SIT_DIST + 0.6) {
+        goal = { x: lead.x, z: lead.z };
+        wantSpeed = toLead > 5 ? DOG_SPEED.trot : DOG_SPEED.walk;
       } else {
         sitting = true;
       }
@@ -155,7 +190,7 @@ export class Dog extends Animal {
     } else { // rest: sit, or stand and sniff the ground
       sitting = this.restSit;
       this.timer -= dt;
-      if (this.timer <= 0) this.state = 'wander';
+      if (this.timer <= 0) { this.state = 'wander'; this.watch = null; }
     }
 
     if (goal) {
@@ -182,17 +217,21 @@ export class Dog extends Animal {
       else { this.x = nx; this.z = nz; this.stuck = 0; }
     }
     this.syncSolid();
-    this.pose(dt, t, sitting, toPlayer, p);
+    // It looks at whoever it's with, when they're close.
+    const lookAt = lead && toLead < 7 ? lead : this.state === 'rest' ? this.watch : null;
+    this.pose(dt, t, sitting, lookAt);
   }
 
   // `sit` eases between 0 (standing) and 1 (sitting); every joint angle is a blend of
   // its standing and sitting value, plus a walk cycle. One number drives the whole
   // transition, so the dog never pops between poses.
-  pose(dt, t, sitting, toPlayer, p) {
+  pose(dt, t, sitting, lookAt) {
     this.sit += ((sitting && this.speed < 0.3 ? 1 : 0) - this.sit) * Math.min(1, dt * 6);
     const sit = this.sit, moving = Math.min(1, this.speed / 2), legs = this.legs;
     // Walk cycle: the phase advances with distance travelled, so the legs never slide.
+    const before = this.phase;
     this.phase += this.speed * dt * 6;
+    this.stepPrint(before, 0.5, 0.12);
     const swing = Math.sin(this.phase) * 0.55 * moving * (1 - sit);
     const hipY = 0.52 + (0.24 - 0.52) * sit;
     this.group.position.set(this.x, this.groundAt(this.x, this.z), this.z);
@@ -204,10 +243,10 @@ export class Dog extends Animal {
     legs.hl.position.y = legs.hr.position.y = hipY;
     legs.hl.rotation.x = -1.05 * sit - swing;                  // hind legs fold forward
     legs.hr.rotation.x = -1.05 * sit + swing;
-    // Look at the player when close, with a little head tilt while sitting with them.
+    // Look at whoever it's with, with a little head tilt while sitting with them.
     let look = 0;
-    if (this.state === 'follow' && toPlayer < 7) {
-      look = Math.atan2(p.x - this.x, p.z - this.z) - this.heading;
+    if (lookAt) {
+      look = Math.atan2(lookAt.x - this.x, lookAt.z - this.z) - this.heading;
       look = clamp(Math.atan2(Math.sin(look), Math.cos(look)), -0.9, 0.9);
     }
     this.lookYaw += (look - this.lookYaw) * Math.min(1, dt * 5);

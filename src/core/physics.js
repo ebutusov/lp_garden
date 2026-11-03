@@ -1,7 +1,7 @@
 import { clamp } from './random.js';
 import { clock } from './clock.js';
 import {
-  POND_Z, POND_R, inPond, waterSurface, ZEN, TEA, FENCE_R,
+  POND_Z, POND_R, inPond, waterSurface, TEA, FENCE_R,
   BRIDGE_SPAN, BRIDGE_RISE, BRIDGE_WIDTH, BRIDGE_DECK,
 } from './layout.js';
 
@@ -95,16 +95,22 @@ export class Physics {
     return deck - BRIDGE_DECK < eyeY + HEAD_CLEARANCE;
   }
 
-  // Places animals won't go (they're polite about the raked gravel and the tatami), for an
-  // animal of radius r whose own collision circle is `self`.
-  groundBlocked(x, z, r, self) {
+  // Places animals won't go (they're polite about the tatami; the raked gravel they
+  // walk on, and the Gardener rakes it smooth again), for an
+  // animal of radius r whose own collision circle is `self`. `other` is one more collider
+  // to overlook (say, whoever it's walking up to).
+  groundBlocked(x, z, r, self, other = null) {
     if (Math.hypot(x, z - POND_Z) < POND_R + 1.2) return true;
     if (Math.abs(x) < BRIDGE_WIDTH / 2 + r && Math.abs(z - POND_Z) < BRIDGE_SPAN / 2 + r) return true; // bridge, with room for the body
-    if (Math.abs(x - ZEN.x) < ZEN.w / 2 + 0.8 && Math.abs(z - ZEN.z) < ZEN.d / 2 + 0.8) return true;
     if (Math.abs(x - TEA.x) < 4.8 && Math.abs(z - TEA.z) < 4.2) return true;
     if (Math.hypot(x, z) > FENCE_R - 2) return true;
+    return this.hitsSolid(x, z, r, self, other);
+  }
+
+  // Would a circle of radius r at (x, z) overlap any solid, apart from the `ignore`d ones?
+  hitsSolid(x, z, r, ...ignore) {
     for (const s of this.solids) {
-      if (s === self) continue;
+      if (ignore.includes(s)) continue;
       if (s.r !== undefined) {
         if (Math.hypot(x - s.x, z - s.z) < s.r + r) return true;
       } else {

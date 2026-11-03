@@ -10,7 +10,8 @@ import { Animal } from './animal.js';
 // ---- Cats ----
 // Three cats with their own routines: they wander, sit, groom, curl up for a nap, stalk
 // birds on the grass (and pounce, always a moment too late), and bolt when the dog comes
-// near. You can pet them, if they're in the mood. Their eyes shine in the dark.
+// near. You can pet them, if they're in the mood. Their eyes shine in the dark, and
+// they leave paw prints on the raked gravel.
 const CAT_SPEED = { wander: 1.1, stalk: 0.7, flee: 4.5, pounce: 5 };
 const CAT_FEELERS = [0, 0.45, -0.45, 0.9, -0.9, 1.4, -1.4, 2, -2];
 // marks: flattened blobs on the back [colour, x, y, z, sizeX, sizeZ]; headMarks likewise on the head.
@@ -36,9 +37,9 @@ class Cat extends Animal {
   static R = 0.3;       // collision radius
   static PET_R = 2.4;   // petting reach
 
-  constructor(ctx, { coat, parent, dog, birds, hearts }) {
+  constructor(ctx, { coat, parent, dog, birds, hearts, zenGarden }) {
     super(ctx, { radius: Cat.R, height: 0.8, parent }); // the player (and the dog) can't walk through a cat
-    Object.assign(this, { dog, birds, hearts });
+    Object.assign(this, { dog, birds, hearts, zenGarden });
     this.name = coat.name;
     this.build(coat);
     this.heading = Math.random() * Math.PI * 2;
@@ -159,12 +160,13 @@ class Cat extends Animal {
     }
   }
 
-  // True if it enjoyed it, false if it walked off.
-  pet() {
+  // Petted by the player, or by `by` (the Gardener). True if it enjoyed it, false if it
+  // walked off.
+  pet(by = null) {
     // Cats are cats: sometimes they'd rather not.
     if (this.state !== 'loaf' && Math.random() < 0.3) {
       this.state = 'wander';
-      this.target = this.openSpot(cameraGroup.position, 8, 14);
+      this.target = this.openSpot(by ?? cameraGroup.position, 8, 14);
       SFX.meow(distVol(this.x, this.z, 25));
       return false;
     }
@@ -173,6 +175,16 @@ class Cat extends Animal {
     this.hearts.spawn(this.head);
     SFX.purr(distVol(this.x, this.z, 20));
     return true;
+  }
+
+  // Is it settled (sitting, grooming or napping), so that someone could come and pet it?
+  get settled() {
+    return this.state === 'sit' || this.state === 'groom' || this.state === 'loaf';
+  }
+
+  // Someone's coming over to pet it: if it's settled, it stays put a while longer.
+  hold(seconds) {
+    if (this.settled) this.timer = Math.max(this.timer, seconds);
   }
 
   update(dt, t) {
@@ -253,7 +265,9 @@ class Cat extends Animal {
     const { sit, lie, crouch, groom } = this.pose;
     const legs = this.legs;
     const moving = Math.min(1, this.speed / 1.2);
+    const before = this.phase;
     this.phase += this.speed * dt * 9;
+    this.stepPrint(before, 0.35, 0.07);
     const swing = Math.sin(this.phase) * 0.6 * moving * (1 - sit) * (1 - lie);
     const jump = this.state === 'pounce' ? Math.sin(Math.min(1, this.pounceT / 0.45) * Math.PI) * 0.45 : 0;
     const hipY = 0.34 + (0.15 - 0.34) * sit + (0.13 - 0.34) * lie + (0.24 - 0.34) * crouch;
@@ -296,13 +310,14 @@ class Cat extends Animal {
   }
 }
 
-// All the cats. They run from the `dog`, stalk the `birds`, and show `hearts` when petted.
+// All the cats. They run from the `dog`, stalk the `birds`, show `hearts` when petted
+// and leave paw prints in the `zenGarden`.
 export class Cats extends Feature {
   static PET_R = Cat.PET_R;
 
-  constructor(ctx, { dog, birds, hearts }) {
+  constructor(ctx, { dog, birds, hearts, zenGarden }) {
     super(ctx);
-    this.list = CAT_COATS.map((coat) => new Cat(ctx, { coat, parent: this.group, dog, birds, hearts }));
+    this.list = CAT_COATS.map((coat) => new Cat(ctx, { coat, parent: this.group, dog, birds, hearts, zenGarden }));
   }
 
   update(dt, t) {

@@ -37,9 +37,10 @@ export class Animal extends Feature {
   }
 
   // Places this animal won't go (see groundBlocked in physics.js). Its own collision
-  // circle doesn't count, or it would always be in its own way.
-  blocked(x, z) {
-    return this.ctx.physics.groundBlocked(x, z, this.radius, this.solid);
+  // circle doesn't count, or it would always be in its own way. Nor does `ignore`, a
+  // collider it means to go right up to.
+  blocked(x, z, ignore = null) {
+    return this.ctx.physics.groundBlocked(x, z, this.radius, this.solid, ignore);
   }
 
   // Height of the ground it stands on at (x, z).
@@ -57,6 +58,18 @@ export class Animal extends Feature {
       if (!this.blocked(this.x + Math.sin(angle) * reach, this.z + Math.cos(angle) * reach)) return { angle, off };
     }
     return null;
+  }
+
+  // Paw prints in the raked gravel. The walk cycle `phase` passes a multiple of π
+  // once a step, so a paw comes down whenever floor(phase / π) changes since `before`;
+  // on the gravel (`this.zenGarden`, if it has one) that leaves a mark, alternately
+  // left and right of its path (its left, +X, is (cos h, -sin h) in the world).
+  stepPrint(before, size, side) {
+    const zen = this.zenGarden, step = Math.floor(this.phase / Math.PI);
+    if (!zen || step === Math.floor(before / Math.PI)) return;
+    const h = this.heading, off = (step % 2 ? 1 : -1) * side;
+    const x = this.x + Math.cos(h) * off, z = this.z - Math.sin(h) * off;
+    if (zen.contains(x, z)) zen.footprint(x, z, h, size, true);
   }
 
   // Move the collision circle to where the animal now is.
