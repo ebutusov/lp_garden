@@ -20,6 +20,7 @@ import { Fence } from './world/fence.js';
 import { Rocks } from './world/rocks.js';
 import { Flowers } from './world/flowers.js';
 import { TeaThings } from './world/teaThings.js';
+import { Grass } from './world/grass.js';
 import { Feeding } from './animals/feeding.js';
 import { KoiSchool } from './animals/koi.js';
 import { Hearts } from './animals/hearts.js';
@@ -48,7 +49,7 @@ import { Interaction } from './animals/interaction.js';
 //     are built in their slot in the random sequence.)
 //
 // `ctx` is the shared context: { scene, physics, placement, rand }.
-export function buildGarden(ctx, { anisotropy = 1 } = {}) {
+export function buildGarden(ctx, { anisotropy = 1, grassDensity = 1 } = {}) {
   const sky = new Sky(ctx);
   const ground = new Ground(ctx, { radius: GROUND_R, hole: { z: POND_Z, r: POND_R } });
   const fuji = new Fuji(ctx, { position: FUJI_POS });
@@ -71,6 +72,9 @@ export function buildGarden(ctx, { anisotropy = 1 } = {}) {
   const rocks = new Rocks(ctx);
   const flowers = new Flowers(ctx);
   const teaThings = new TeaThings(ctx, { house: teaHouse });
+  // The lawn: after every fixed feature, whose colliders and platforms it grows around.
+  // It has its own seeded generator, so it doesn't use (or shift) ctx.rand.
+  const grass = new Grass(ctx, { stones: steppingStones.footprints(), density: grassDensity });
 
   // Animals: after every collider is in place.
   const hearts = new Hearts(ctx);
@@ -80,11 +84,13 @@ export function buildGarden(ctx, { anisotropy = 1 } = {}) {
   // The birds watch out for the cats, but the cats need the birds (to stalk them), so
   // the birds are made first and told about the cats afterwards.
   birds.cats = cats;
+  // The dog and cats part the grass as they walk through it.
+  grass.pushers = [dog, ...cats.list];
   const interaction = new Interaction({ dog, cats, feeding });
 
   return {
     sky, ground, fuji, clouds, trees, lanterns, pond, ripples, bridge, torii, steppingStones,
-    teaHouse, zenGarden, shishi, fence, rocks, flowers, teaThings,
+    teaHouse, zenGarden, shishi, fence, rocks, flowers, teaThings, grass,
     feeding, koi, hearts, dog, birds, cats, interaction,
   };
 }
