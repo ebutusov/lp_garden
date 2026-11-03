@@ -38,12 +38,18 @@ export class TeaThings extends Feature {
     part(new THREE.CylinderGeometry(0.02, 0.026, 0.15, 6), CLAY, 0.2, 0.13, 0, pot)
       .rotation.z = -(Math.PI / 2 - 0.2);                                                // handle, tilted up
 
-    // Four cups (yunomi) of green tea on wooden saucers, one at each seat.
+    // Four cups (yunomi) of green tea on wooden saucers, one at each seat. Each cup and
+    // its tea are a group of their own, so someone can pick the cup up (see gardener.js).
+    this.cups = [];
     for (const [dx, z] of [[0.45, 0.25], [0.45, -0.25], [-0.45, 0.25], [-0.45, -0.25]]) {
       const x = TABLE_X + dx;
       part(new THREE.CylinderGeometry(0.085, 0.085, 0.012, 10), M.wood, x, TABLE_TOP + 0.006, z);
-      part(new THREE.CylinderGeometry(0.058, 0.046, 0.12, 10), GLAZE, x, TABLE_TOP + 0.072, z);
-      part(new THREE.CircleGeometry(0.05, 10).rotateX(-Math.PI / 2), GREEN_TEA, x, TABLE_TOP + 0.133, z);
+      const cup = new THREE.Group();
+      cup.position.set(x, TABLE_TOP + 0.012, z);
+      this.group.add(cup);
+      part(new THREE.CylinderGeometry(0.058, 0.046, 0.12, 10), GLAZE, 0, 0.06, 0, cup);
+      part(new THREE.CircleGeometry(0.05, 10).rotateX(-Math.PI / 2), GREEN_TEA, 0, 0.121, 0, cup);
+      this.cups.push({ group: cup, home: cup.position.clone() });
     }
 
     // Ceramic charcoal brazier (hibachi) in the back corner, with an iron kettle (tetsubin) on it.
@@ -65,6 +71,12 @@ export class TeaThings extends Feature {
     this.solidCircle(BX, BZ, 0.4, floorY + 0.9);
 
     this.addSteam(kettle);
+  }
+
+  // The cup nearest the local point (x, z), e.g. a seat.
+  nearestCup(x, z) {
+    const d = (c) => Math.hypot(c.home.x - x, c.home.z - z);
+    return this.cups.reduce((a, b) => (d(a) <= d(b) ? a : b));
   }
 
   // A wisp of steam from the kettle's spout. The spout tip is known in the kettle's own

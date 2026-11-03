@@ -8,8 +8,8 @@ export function initHint(deps) {
   ({ interaction, feeding } = deps);
 }
 export function updateHint() {
-  const pet = interaction.nearestPettable();
-  const action = pet ? `pet the ${pet.kind}`
+  const near = interaction.nearest();
+  const action = near?.kind === 'gardener' ? 'greet the Gardener' : near ? `pet the ${near.kind}`
     : feeding.target() !== null && feeding.pellets.length === 0 ? 'feed the koi' : '';
   const text = action ? `${touch.enabled ? 'Tap ✋' : 'Press E'} to ${action}` : '';
   // Only touch the DOM when the text changes: writing to it every frame forces work.

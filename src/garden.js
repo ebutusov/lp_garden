@@ -28,6 +28,7 @@ import { Dog } from './animals/dog.js';
 import { Birds } from './animals/birds.js';
 import { Cats } from './animals/cats.js';
 import { Interaction } from './animals/interaction.js';
+import { Gardener } from './people/gardener.js';
 
 // ---- Building the garden: the composition root ----
 // Every feature and animal is a class that is handed what it needs (dependency
@@ -78,19 +79,24 @@ export function buildGarden(ctx, { anisotropy = 1, grassDensity = 1 } = {}) {
 
   // Animals: after every collider is in place.
   const hearts = new Hearts(ctx);
-  const dog = new Dog(ctx, { hearts });
+  const dog = new Dog(ctx, { hearts, zenGarden });
   const birds = new Birds(ctx, { perchSources: [lanterns, trees, torii, teaHouse, fence], dog });
-  const cats = new Cats(ctx, { dog, birds, hearts });
+  const cats = new Cats(ctx, { dog, birds, hearts, zenGarden });
   // The birds watch out for the cats, but the cats need the birds (to stalk them), so
   // the birds are made first and told about the cats afterwards.
   birds.cats = cats;
-  // The dog and cats part the grass as they walk through it.
-  grass.pushers = [dog, ...cats.list];
-  const interaction = new Interaction({ dog, cats, feeding });
+  // The Gardener looks after all of it, so he's handed most of the garden. He draws
+  // only from Math.random, so building him last leaves the layout alone.
+  const gardener = new Gardener(ctx, {
+    teaHouse, teaThings, zenGarden, pond, feeding, trees, flowers, fuji, dog, cats, fenceR: FENCE_R,
+  });
+  // The dog, the cats and the Gardener part the grass as they walk through it.
+  grass.pushers = [dog, ...cats.list, gardener];
+  const interaction = new Interaction({ dog, cats, feeding, gardener });
 
   return {
     sky, ground, fuji, clouds, trees, lanterns, pond, ripples, bridge, torii, steppingStones,
     teaHouse, zenGarden, shishi, fence, rocks, flowers, teaThings, grass,
-    feeding, koi, hearts, dog, birds, cats, interaction,
+    feeding, koi, hearts, dog, birds, cats, gardener, interaction,
   };
 }

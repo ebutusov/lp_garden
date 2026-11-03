@@ -12,6 +12,10 @@ export class TeaHouse extends Feature {
   constructor(ctx, { x, z }) {
     super(ctx, { x, z });
     this.floorY = FLOOR;
+    // Where a visitor kneels at the table (local; facing +X, out of the doorway), and the
+    // way there from outside: up the step, through the door and round the table's end.
+    this.seat = { x: -1.7, z: 0, heading: Math.PI / 2 };
+    this.visitPath = [[6.6, 0], [4.4, 0], [2.6, 0], [0.9, 1.05], [-1.7, 1.05], [-1.7, 0]];
     this.box(8, 0.5, 7, M.darkWood, 0, 0.25, 0);                // raised floor
     this.box(7.4, 0.05, 6.4, M.tatami, 0, 0.525, 0);            // tatami
     this.box(0.8, 0.27, 3, M.stone, 4.4, 0.135, 0);             // step up to the doorway

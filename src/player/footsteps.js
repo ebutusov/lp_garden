@@ -16,7 +16,8 @@ let teaHouse, zenGarden, ripples;
 export function initFootsteps(features) {
   ({ teaHouse, zenGarden, ripples } = features);
 }
-function footstep(wading, p, feet) {
+// `side` is which foot: 1 left, -1 right.
+function footstep(wading, p, feet, side) {
   if (wading) {
     ripples.spawn(p.x, p.z - POND_Z, 1.1, 1.5);
     SFX.step('water');
@@ -24,7 +25,14 @@ function footstep(wading, p, feet) {
   }
   const deck = bridgeDeckTop(p.x, p.z);
   const onDeck = deck !== null && Math.abs(feet - deck) < 0.3;
-  SFX.step(onDeck || teaHouse.contains(p.x, p.z) ? 'wood' : zenGarden.contains(p.x, p.z) ? 'gravel' : 'grass');
+  const gravel = !onDeck && zenGarden.contains(p.x, p.z);
+  SFX.step(onDeck || teaHouse.contains(p.x, p.z) ? 'wood' : gravel ? 'gravel' : 'grass');
+  if (gravel) {
+    // A footprint in the raked gravel, a little to the side of the camera. The player
+    // faces (-sin yaw, -cos yaw), i.e. heading h = yaw + π; their left is (cos h, -sin h).
+    const h = player.yaw + Math.PI, off = side * 0.13;
+    zenGarden.footprint(p.x + Math.cos(h) * off, p.z - Math.sin(h) * off, h);
+  }
 }
 export function updateFootsteps(dt, t) {
   const p = cameraGroup.position;
@@ -46,7 +54,8 @@ export function updateFootsteps(dt, t) {
     // so a footstep sound plays each time it crosses a multiple of π.
     const before = Math.floor(stepPhase / Math.PI);
     stepPhase += moved / STRIDE * Math.PI;
-    if (Math.floor(stepPhase / Math.PI) !== before) footstep(wading, p, feet);
+    const step = Math.floor(stepPhase / Math.PI);
+    if (step !== before) footstep(wading, p, feet, step % 2 ? 1 : -1);
   }
   // Lowest point of the bob lands on each footfall; in water you float gently instead.
   const stepBob = (Math.abs(Math.sin(stepPhase)) - 0.5) * bobAmp;

@@ -23,7 +23,7 @@ import { Feature } from './feature.js';
 //    and re-uploading them each frame would be far too slow; on the GPU it's free.
 //    The wind is the same breeze the trees, petals and clouds follow (windStrength and
 //    WIND_DIR in layout.js): a steady lean, plus gusts that roll across the lawn as
-//    waves, plus a fast flutter. The player, the dog and the cats also push blades aside.
+//    waves, plus a fast flutter. The player, the dog, the cats and the Gardener also push blades aside.
 //
 // Like the pond water (water.js), the material is a MeshStandardMaterial with a few
 // lines of GLSL spliced in (onBeforeCompile), so sun, shadows, fog and night all
@@ -35,7 +35,7 @@ import { Feature } from './feature.js';
 
 const TILE = 20;          // tile size, in world units
 const OUTER_R = 78;       // the lawn fades out under the fog beyond the fence
-const MAX_PUSHERS = 6;    // player, dog and cats
+const MAX_PUSHERS = 6;    // player, dog, three cats and the Gardener
 
 // The blade shape: a tapered, slightly curved strip, 3 segments high, in the XY plane.
 // Unit height; each tuft's instance matrix scales it. `uv.y` (0 at the root, 1 at the
@@ -214,7 +214,7 @@ export class Grass extends Feature {
     const rand = mulberry32(SEED * 7919 + 17);
     const { material, uniforms } = makeGrassMaterial();
     this.uniforms = uniforms;
-    this.pushers = []; // animals with x, z; set by garden.js once they exist
+    this.pushers = []; // animals (and the Gardener) with x, z; set by garden.js once they exist
 
     const solids = physics.solids.slice(); // the animals add theirs later; ignore those
     const blocked = (x, z) => {

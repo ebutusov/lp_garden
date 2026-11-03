@@ -41,16 +41,22 @@ export class Feeding extends Feature {
     if (this.cooldown > 0) return false;
     const target = this.target();
     if (!target) return false;
+    this.drop(target.lx, target.lz);
+    SFX.plop(1);
+    this.cooldown = 2;
+    return true;
+  }
+
+  // Scatter a handful of pellets around (lx, lz), pond-local. The player feeds through
+  // tryFeed(); the Gardener, who knows where he's throwing, calls this directly.
+  drop(lx, lz) {
     for (let i = 0; i < 7; i++) {
       const a = Math.random() * Math.PI * 2, r = Math.random() * 0.9;
-      const x = target.lx + Math.cos(a) * r, z = target.lz + Math.sin(a) * r;
+      const x = lx + Math.cos(a) * r, z = lz + Math.sin(a) * r;
       const mesh = this.mesh(pelletGeo, M.pellet, x, WATER_LEVEL, z);
       this.pellets.push({ mesh, x, z, age: 0 });
       this.ripples.spawn(x, z, 0.4, 1);
     }
-    SFX.plop(1);
-    this.cooldown = 2;
-    return true;
   }
 
   nearest(x, z) {
