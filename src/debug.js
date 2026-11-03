@@ -13,7 +13,7 @@ import { setHelpVisible } from './ui/help.js';
 //   garden.setView({ x: 0, y: 12, z: 10, yaw: 0, pitch: -0.8, fly: true })
 // main.js installs them once the garden is built, handing over what they inspect.
 export function installDebug(garden, { physics }) {
-  const { trees, lanterns, pond, flowers, steppingStones, koi, feeding, dog, birds, cats, interaction } = garden;
+  const { trees, lanterns, pond, flowers, steppingStones, koi, feeding, dog, birds, cats, gardener, zenGarden, interaction } = garden;
   const { solids, mounds } = physics;
   window.garden = {
     // What actually got placed (trees that found no room are skipped).
@@ -52,9 +52,19 @@ export function installDebug(garden, { physics }) {
       return pet.animal.pet() ? 'cat' : 'cat:aloof';
     },
     cats: () => cats.list.map((c) => ({ name: c.name, state: c.state, x: c.x, z: c.z, speed: c.speed })),
+    // The Gardener: what he's doing and where. gardenerDo('rake') makes him start an
+    // activity ('admire', 'view', 'tea', 'feed', 'rake', 'pet'); greet() is the E key.
+    gardener: () => ({
+      activity: gardener.activity, pose: gardener.poseName, x: gardener.x, z: gardener.z, heading: gardener.heading,
+      speed: gardener.speed, rake: gardener.rakeHeld ? gardener.rakeMode : 'down', cup: !!gardener.held,
+    }),
+    gardenerDo: (name) => gardener.start(name),
+    greet: () => gardener.greet(),
+    // Footprints in the gravel since it was last raked.
+    zenPrints: () => zenGarden.prints,
     // Put the dog somewhere (for testing how the cats react).
     moveDog: (x, z) => { dog.x = x; dog.z = z; },
-    dog: () => ({ x: dog.x, z: dog.z, state: dog.state, sit: dog.sit, speed: dog.speed }),
+    dog: () => ({ x: dog.x, z: dog.z, state: dog.state, sit: dog.sit, speed: dog.speed, leader: dog.leader === gardener ? 'gardener' : dog.leader }),
     birds: () => birds.list.map((b) => {
       const { x, y, z } = b.group.position;
       return { species: b.species, state: b.state, on: b.perch.kind, x, y, z };
@@ -68,7 +78,7 @@ export function installDebug(garden, { physics }) {
     // features are built and call rand(); see garden.js).
     fingerprint() {
       const r = (v) => Math.round(v * 1000) / 1000;
-      const animalSolids = new Set([dog.solid, ...cats.list.map((c) => c.solid)]);
+      const animalSolids = new Set([dog.solid, gardener.solid, ...cats.list.map((c) => c.solid)]);
       const data = {
         mounds: mounds.map((m) => [r(m.x), r(m.z), r(m.r)]),
         solids: solids.filter((s) => !animalSolids.has(s)).map((s) => (s.r !== undefined

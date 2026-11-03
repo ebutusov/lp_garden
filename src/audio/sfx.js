@@ -104,6 +104,16 @@ export const SFX = {
     src.start(now); lfo.start(now);
     src.stop(now + DUR + 0.05); lfo.stop(now + DUR + 0.05);
   },
+  rake(vol = 1) { // the Gardener's rake drawn through gravel: a dry, grainy scrape
+    if (!audible() || vol < 0.02) return;
+    noiseBurst({ type: 'highpass', freq: 2600, gain: 0.05 * vol, dur: 0.7, attack: 0.15 });
+    noiseBurst({ freq: 900, q: 0.8, gain: 0.03 * vol, dur: 0.6, attack: 0.12 });
+  },
+  sip(vol = 1) { // a quiet slurp of tea
+    if (!audible() || vol < 0.02) return;
+    noiseBurst({ freq: 1800, q: 3, gain: 0.05 * vol, dur: 0.35, attack: 0.08 });
+    tone({ freq: 300, to: 220, gain: 0.03 * vol, dur: 0.2, delay: 0.3 }); // the swallow
+  },
   yip(vol = 1) { // happy little yip when petted
     if (!audible() || vol < 0.02) return;
     tone({ freq: 700, to: 950, type: 'triangle', gain: 0.1 * vol, dur: 0.09 });

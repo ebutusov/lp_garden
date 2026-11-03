@@ -41,7 +41,7 @@ const ctx = { scene, physics: new Physics(), placement: new Placement(rand), ran
 
 const garden = buildGarden(ctx, { anisotropy: renderer.capabilities.getMaxAnisotropy() });
 const {
-  sky, pond, koi, feeding, ripples, trees, shishi, dog, hearts, birds, cats, teaThings, clouds, lanterns,
+  sky, pond, koi, feeding, ripples, trees, shishi, dog, hearts, birds, cats, gardener, teaThings, zenGarden, clouds, lanterns,
 } = garden;
 
 // Hand the function modules the parts of the garden they need.
@@ -85,6 +85,8 @@ function animate() {
   hearts.update(dt);
   birds.update(dt, t);
   cats.update(dt, t);
+  gardener.update(dt, t);
+  zenGarden.update(dt); // uploads the gravel texture if footprints or raking changed it
   teaThings.update(dt, t);
   updateFireflies(t);
   clouds.update(dt, t);
