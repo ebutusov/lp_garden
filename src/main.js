@@ -39,9 +39,13 @@ import { installDebug } from './debug.js';
 const rand = mulberry32(SEED);
 const ctx = { scene, physics: new Physics(), placement: new Placement(rand), rand };
 
-const garden = buildGarden(ctx, { anisotropy: renderer.capabilities.getMaxAnisotropy() });
+// Phones and tablets get half the grass: their GPUs have less to spare.
+const garden = buildGarden(ctx, {
+  anisotropy: renderer.capabilities.getMaxAnisotropy(),
+  grassDensity: matchMedia('(pointer: coarse)').matches ? 0.5 : 1,
+});
 const {
-  sky, pond, koi, feeding, ripples, trees, shishi, dog, hearts, birds, cats, gardener, teaThings, zenGarden, clouds, lanterns,
+  sky, grass, pond, koi, feeding, ripples, trees, shishi, dog, hearts, birds, cats, gardener, teaThings, zenGarden, clouds, lanterns,
 } = garden;
 
 // Hand the function modules the parts of the garden they need.
@@ -79,6 +83,7 @@ function animate() {
   feeding.update(dt, t);
   ripples.update(dt, t);
   trees.update(dt, t);
+  grass.update(dt, t);
   updatePetals(dt, t);
   shishi.update(dt, t);
   dog.update(dt, t);

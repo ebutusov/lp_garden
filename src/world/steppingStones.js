@@ -24,4 +24,12 @@ export class SteppingStones extends Feature {
       x, 0.12, z, { cast: true, receive: true });
     stone.rotation.y = rand() * Math.PI;
   }
+
+  // Each stone's footprint { x, z, r } (the group sits at the origin, so these are world
+  // coordinates). The grass keeps clear of them.
+  footprints() {
+    return this.group.children.map((o) => ({
+      x: o.position.x, z: o.position.z, r: Math.max(o.geometry.parameters.radiusTop, o.geometry.parameters.radiusBottom),
+    }));
+  }
 }

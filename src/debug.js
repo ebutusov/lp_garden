@@ -13,11 +13,19 @@ import { setHelpVisible } from './ui/help.js';
 //   garden.setView({ x: 0, y: 12, z: 10, yaw: 0, pitch: -0.8, fly: true })
 // main.js installs them once the garden is built, handing over what they inspect.
 export function installDebug(garden, { physics }) {
-  const { trees, lanterns, pond, flowers, steppingStones, koi, feeding, dog, birds, cats, gardener, zenGarden, interaction } = garden;
+  const { trees, lanterns, pond, flowers, steppingStones, koi, feeding, dog, birds, cats, gardener, zenGarden, interaction, grass } = garden;
   const { solids, mounds } = physics;
   window.garden = {
     // What actually got placed (trees that found no room are skipped).
-    layout: { trees: trees.list.length, cherries: trees.cherryCrowns.length, lanterns: lanterns.list.length },
+    layout: {
+      trees: trees.list.length, cherries: trees.cherryCrowns.length, lanterns: lanterns.list.length,
+      grassTufts: grass.count, grassTiles: grass.group.children.length,
+    },
+    // The grass shader's current wind and pushers (player, dog, cats: x, z, radius, strength).
+    grass: () => ({
+      wind: grass.uniforms.uWind.value,
+      pushers: grass.uniforms.uPushers.value.map((p) => p.toArray().map((v) => Math.round(v * 100) / 100)),
+    }),
     // Jump the camera to an exact viewpoint.
     setView({ x, y, z, yaw: newYaw, pitch: newPitch, fly } = {}) {
       if (fly !== undefined) player.flyMode = fly;
