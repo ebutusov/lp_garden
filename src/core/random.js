@@ -11,7 +11,7 @@
 // the ORDER in which they call rand() decides the layout, so garden.js builds the
 // garden in a fixed order.
 
-export const SEED = 123;
+export const SEED = 1;
 
 // mulberry32: a tiny, fast 32-bit PRNG. It returns a function, rand(), that carries
 // its own state in a closure, so two generators made from the same seed are
