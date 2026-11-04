@@ -40,9 +40,9 @@ export function setNight(on) {
 }
 
 // The features whose look changes, handed over by main.js.
-let sky, fuji, clouds, lanterns, teaHouse;
+let sky, fuji, mountains, clouds, lanterns, teaHouse;
 export function initDayNight(features) {
-  ({ sky, fuji, clouds, lanterns, teaHouse } = features);
+  ({ sky, fuji, mountains, clouds, lanterns, teaHouse } = features);
   dayNightBtn.addEventListener('click', () => setNight(!env.isNight));
 }
 
@@ -68,6 +68,9 @@ export function updateDayNight(dt) {
   fog.color.copy(horizon);
   scene.background.copy(horizon);
   applyHaze(fuji.material, 0.35, horizon);
+  // The far range is hazier than Fuji, the foothills a little less so.
+  applyHaze(mountains.materials.near, 0.45, horizon);
+  applyHaze(mountains.materials.far, 0.6, horizon);
   applyHaze(clouds.material, 0.2, horizon, 0.3 * (1 - m));
   applyHaze(clouds.fujiMaterial, 0.3, horizon, 0.3 * (1 - m));
   // Unlit sprites: bright mist by day, only a faint sheen at night.

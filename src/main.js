@@ -45,7 +45,7 @@ const garden = buildGarden(ctx, {
   grassDensity: matchMedia('(pointer: coarse)').matches ? 0.5 : 1,
 });
 const {
-  sky, grass, pond, koi, feeding, ripples, trees, shishi, dog, hearts, birds, cats, gardener, butterflies, teaThings, bowls, zenGarden, clouds, lanterns,
+  sky, grass, pond, koi, feeding, ripples, trees, shishi, stream, dog, hearts, birds, cats, gardener, butterflies, teaThings, bowls, zenGarden, clouds, lanterns,
 } = garden;
 
 // Hand the function modules the parts of the garden they need.
@@ -86,6 +86,7 @@ function animate() {
   grass.update(dt, t);
   updatePetals(dt, t);
   shishi.update(dt, t);
+  stream.update(dt, t);
   dog.update(dt, t);
   hearts.update(dt);
   birds.update(dt, t);

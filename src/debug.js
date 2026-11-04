@@ -13,7 +13,7 @@ import { setHelpVisible } from './ui/help.js';
 //   garden.setView({ x: 0, y: 12, z: 10, yaw: 0, pitch: -0.8, fly: true })
 // main.js installs them once the garden is built, handing over what they inspect.
 export function installDebug(garden, { physics }) {
-  const { trees, lanterns, pond, flowers, steppingStones, koi, feeding, dog, birds, cats, gardener, butterflies, zenGarden, interaction, grass, bowls } = garden;
+  const { trees, lanterns, pond, flowers, steppingStones, koi, feeding, dog, birds, cats, gardener, butterflies, zenGarden, interaction, grass, bowls, stream, mountains, forest } = garden;
   const { solids, mounds } = physics;
   // Where an animal is with its meal: which bowl, whether it's got there, how far off it is.
   const meal = (a) => (a.state === 'bowl' ? {
@@ -23,7 +23,7 @@ export function installDebug(garden, { physics }) {
     // What actually got placed (trees that found no room are skipped).
     layout: {
       trees: trees.list.length, cherries: trees.cherryCrowns.length, lanterns: lanterns.list.length,
-      grassTufts: grass.count, grassTiles: grass.group.children.length,
+      grassTufts: grass.count, grassTiles: grass.group.children.length, mountains: mountains.count, forestTrees: forest.count,
       butterflies: butterflies.list.length, butterflyLandings: butterflies.landings.length,
     },
     // The grass shader's current wind and pushers (player, dog, cats: x, z, radius, strength).
@@ -127,6 +127,15 @@ export function installDebug(garden, { physics }) {
       }
       return sent;
     },
+    // The stream: how long it is, where the falls land, and whether the player is
+    // standing in it.
+    stream: () => {
+      const p = cameraGroup.position;
+      return {
+        samples: stream.course.length, pool: stream.pool, impact: stream.impact.toArray().map((v) => Math.round(v * 100) / 100),
+        wading: stream.contains(p.x, p.z), stones: stream.stones.length,
+      };
+    },
     // How many pellets are on the water, and where the koi are (pond-local).
     pond() {
       return { pellets: feeding.pellets.length, koi: koi.list.map((k) => ({ x: k.x, z: k.z })) };
@@ -136,9 +145,9 @@ export function installDebug(garden, { physics }) {
     // features are built and call rand(); see garden.js).
     fingerprint() {
       const r = (v) => Math.round(v * 1000) / 1000;
-      // The animals' colliders move, and the bowls' were added after the layout was
-      // fixed; neither is part of what rand() placed.
-      const animalSolids = new Set([dog.solid, gardener.solid, ...cats.list.map((c) => c.solid), ...bowls.solids]);
+      // The animals' colliders move, and the bowls' and the stream's were added after
+      // the layout was fixed; none of them is part of what rand() placed.
+      const animalSolids = new Set([dog.solid, gardener.solid, ...cats.list.map((c) => c.solid), ...bowls.solids, ...stream.solids]);
       const data = {
         mounds: mounds.map((m) => [r(m.x), r(m.z), r(m.r)]),
         solids: solids.filter((s) => !animalSolids.has(s)).map((s) => (s.r !== undefined

@@ -8,7 +8,7 @@ import { showToast } from '../ui/toast.js';
 // Web Audio connects "nodes" into a graph: source → filter → gain → … → speakers.
 // Browsers only allow an AudioContext to start after a user gesture, which is one
 // reason sound starts switched off.
-export const sound = { on: false, ctx: null, master: null, noise: null, waterGain: null, nextBird: 0, nextCricket: 0 };
+export const sound = { on: false, ctx: null, master: null, noise: null, waterGain: null, fallsGain: null, nextBird: 0, nextCricket: 0 };
 const soundBtn = document.getElementById('sound');
 
 function initAudio() {
@@ -29,7 +29,21 @@ function initAudio() {
   waterGain.gain.value = 0;
   src.connect(lp).connect(waterGain).connect(master);
   src.start();
-  Object.assign(sound, { ctx, master, noise, waterGain });
+  // the waterfall: the same noise, but brighter (a band higher up) for the hiss and
+  // splash of falling water, plus a low rumble; its volume follows distance to the falls
+  const falls = ctx.createBufferSource();
+  falls.buffer = noise; falls.loop = true;
+  const hiss = ctx.createBiquadFilter();
+  hiss.type = 'bandpass'; hiss.frequency.value = 1500; hiss.Q.value = 0.5;
+  const rumble = ctx.createBiquadFilter();
+  rumble.type = 'lowpass'; rumble.frequency.value = 300;
+  const fallsGain = ctx.createGain();
+  fallsGain.gain.value = 0;
+  falls.connect(hiss).connect(fallsGain);
+  falls.connect(rumble).connect(fallsGain);
+  fallsGain.connect(master);
+  falls.start(0, 0.7); // from another point in the noise, so it doesn't echo the pond's loop
+  Object.assign(sound, { ctx, master, noise, waterGain, fallsGain });
 }
 export function setSound(on) {
   sound.on = on;

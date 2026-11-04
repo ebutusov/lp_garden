@@ -40,6 +40,9 @@ export const TREE_SPOTS = [
 ];
 // Mount Fuji's foot, far beyond the fence (and the fog).
 export const FUJI_POS = new THREE.Vector3(-90, -2, -250);
+// The woodland ringing the garden outside the fence, out into the fog. On foot you can
+// walk out of the gateway as far as its edge.
+export const FOREST = { inner: 66, outer: 140 };
 
 // The arched bridge runs north-south across the pond at x = 0.
 export const BRIDGE_SPAN = (POND_R + 2) * 2; // long enough to land on both banks
@@ -52,3 +55,45 @@ export const WIND_DIR = new THREE.Vector2(0.92, 0.39).normalize();
 // Breeze strength over time: a slow swell plus gusts. Summing a few sine waves of
 // unrelated frequencies is a cheap way to get motion that never visibly repeats.
 export const windStrength = (t) => Math.max(0, 0.55 + 0.3 * Math.sin(t * 0.21) + 0.2 * Math.sin(t * 0.67 + 1.3));
+
+// ---- The brook ----
+// A rockery (a tsukiyama, "built hill") in the north-west corner, with a waterfall on
+// its south face. The water gathers in a plunge pool at its foot and winds south-east
+// as a shallow stream into the pond's north-west bank. Seen from the entrance, the
+// falls sit just under Mount Fuji.
+//
+// The course runs through ground where nothing random had been placed, so reserving
+// it (placement.js) leaves every tree, flower and rock where it was.
+export const FALLS = { x: -23, z: -31, r: 4, height: 3.2 };   // the rockery, and the falls' drop
+export const FALLS_FACING = Math.atan2(0.4, 0.92);             // heading of the falls' face (atan2(x, z))
+export const STREAM_INLET = -2.5;                              // angle on the pond rim where the stream joins it
+export const STREAM_BANK = 1.1;                                // how far the banks reach past the water's edge
+// The stream's centre line, from the plunge pool to the pond rim: [x, z, water width].
+export const STREAM = [
+  [-21.7, -28.0, 3.0],  // plunge pool
+  [-21.2, -25.6, 1.5],
+  [-21.5, -22.4, 1.3],
+  [-18.6, -19.6, 1.3],
+  [-15.4, -18.6, 1.4],
+  [-12.4, -15.6, 1.4],
+  [Math.cos(STREAM_INLET) * (POND_R + 0.8), POND_Z + Math.sin(STREAM_INLET) * (POND_R + 0.8), 1.5],
+];
+
+// Evenly spaced samples { x, z, w, heading } along a smooth curve through STREAM, about
+// `step` apart. A Catmull-Rom spline passes through every control point (unlike a Bézier
+// curve, which only passes near its middle ones), so the course goes where it's told.
+// The width is interpolated between the control points' widths.
+export function streamCourse(step = 0.5) {
+  const curve = new THREE.CatmullRomCurve3(STREAM.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal');
+  const n = Math.max(2, Math.ceil(curve.getLength() / step));
+  const out = [];
+  for (let i = 0; i <= n; i++) {
+    const u = i / n;                                   // fraction of the length...
+    const p = curve.getPointAt(u), tan = curve.getTangentAt(u);
+    const k = curve.getUtoTmapping(u) * (STREAM.length - 1); // ...and which control points it lies between
+    const j = Math.min(STREAM.length - 2, Math.floor(k));
+    const w = THREE.MathUtils.lerp(STREAM[j][2], STREAM[j + 1][2], k - j);
+    out.push({ x: p.x, z: p.z, w, heading: Math.atan2(tan.x, tan.z) });
+  }
+  return out;
+}

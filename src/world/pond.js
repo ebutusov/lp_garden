@@ -9,13 +9,22 @@ import { makeWaterMaterial, makeWaterGeometry, addMirror } from './water.js';
 // the koi, ripples and food pellets) use simple pond-local coordinates: (0, 0) is the
 // middle of the pond. World z = local z + the pond's z.
 export class Pond extends Feature {
-  constructor(ctx, { z, radius }) {
+  // `inlet` { angle, width }: a gap in the rim where a stream flows in (angle measured
+  // as in layout.js: the rim point is (cos angle, sin angle) · radius from the centre).
+  constructor(ctx, { z, radius, inlet = null }) {
     super(ctx, { z });
     const { rand } = ctx;
     this.radius = radius;
     // stone rim around the hole in the ground. A torus is a ring (doughnut); lying it flat
     // hides the seam between the ground's hole and the water.
-    this.mesh(new THREE.TorusGeometry(radius + 0.2, 0.6, 6, 28), M.stoneD, 0, -0.05, 0, { receive: true })
+    // With an inlet, the torus is only an arc (its last parameter: how far round it goes),
+    // turned so the missing piece faces the stream. In its own XY plane a torus starts at
+    // angle 0 and runs anticlockwise; lying it flat (rotateX below) turns its angle φ into
+    // the garden's -φ, hence the minus signs.
+    this.inletGap = inlet ? inlet.width / 2 / (radius + 0.2) : 0; // half the gap, as an angle
+    const rimGeo = new THREE.TorusGeometry(radius + 0.2, 0.6, 6, 28, Math.PI * 2 - 2 * this.inletGap);
+    if (inlet) rimGeo.rotateZ(-inlet.angle + this.inletGap);
+    this.mesh(rimGeo, M.stoneD, 0, -0.05, 0, { receive: true })
       .rotation.x = -Math.PI / 2;
 
     // inner wall of the pond, so the hole doesn't look into the void. An open-ended

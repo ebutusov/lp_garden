@@ -1,10 +1,12 @@
 import {
   GROUND_R, POND_Z, POND_R, FENCE_R, FENCE_GAP, FENCE_H, TEA, TEA_PATH, BOWLS, ZEN, SHISHI, TORII_Z,
-  LANTERN_SPOTS, PATH_LANTERN_SPOTS, PATH_LANTERN_SCALE, PATH_LANTERN_GLOW, TREE_SPOTS, FUJI_POS,
+  LANTERN_SPOTS, PATH_LANTERN_SPOTS, PATH_LANTERN_SCALE, PATH_LANTERN_GLOW, TREE_SPOTS, FUJI_POS, STREAM_INLET,
 } from './core/layout.js';
 import { Sky } from './world/sky.js';
 import { Ground } from './world/ground.js';
 import { Fuji } from './world/fuji.js';
+import { Mountains } from './world/mountains.js';
+import { Forest } from './world/forest.js';
 import { Clouds } from './world/clouds.js';
 import { Trees } from './world/trees.js';
 import { Lanterns } from './world/lanterns.js';
@@ -21,6 +23,7 @@ import { Rocks } from './world/rocks.js';
 import { Flowers } from './world/flowers.js';
 import { TeaThings } from './world/teaThings.js';
 import { Bowls } from './world/bowls.js';
+import { Stream } from './world/stream.js';
 import { Grass } from './world/grass.js';
 import { Feeding } from './animals/feeding.js';
 import { KoiSchool } from './animals/koi.js';
@@ -59,11 +62,14 @@ export function buildGarden(ctx, { anisotropy = 1, grassDensity = 1 } = {}) {
   const ground = new Ground(ctx, { radius: GROUND_R, hole: { z: POND_Z, r: POND_R } });
   const fuji = new Fuji(ctx, { position: FUJI_POS });
   const clouds = new Clouds(ctx, { fuji });
+  // Lower ranges round the horizon, which make way for Fuji. Own seeded generator.
+  const mountains = new Mountains(ctx, { fuji });
   const trees = new Trees(ctx, { spots: TREE_SPOTS });
   const lanterns = new Lanterns(ctx, {
     spots: LANTERN_SPOTS, pathSpots: PATH_LANTERN_SPOTS, pathScale: PATH_LANTERN_SCALE, pathGlow: PATH_LANTERN_GLOW,
   });
-  const pond = new Pond(ctx, { z: POND_Z, radius: POND_R });
+  // The rim has a gap where the stream flows in (the stream itself is built further down).
+  const pond = new Pond(ctx, { z: POND_Z, radius: POND_R, inlet: { angle: STREAM_INLET, width: 2.6 } });
   const ripples = new Ripples(ctx, { pond });
   const feeding = new Feeding(ctx, { pond, ripples });
   const koi = new KoiSchool(ctx, { pond, ripples, feeding });
@@ -79,14 +85,22 @@ export function buildGarden(ctx, { anisotropy = 1, grassDensity = 1 } = {}) {
   const teaThings = new TeaThings(ctx, { house: teaHouse });
   // The pets' bowls by the tea house. Fixed, so they draw nothing from ctx.rand.
   const bowls = new Bowls(ctx, { x: BOWLS.x, z: BOWLS.z, house: TEA });
+  // The rockery, waterfall and stream (FALLS, STREAM in layout.js). Its stones come from
+  // its own seeded generator, so it draws nothing from ctx.rand either.
+  const stream = new Stream(ctx, { pond, ripples });
+  // The woodland outside the fence: scenery only (no colliders, its own seeded
+  // generator). After the ground, whose mounds it stands on.
+  const forest = new Forest(ctx, { fuji, density: grassDensity });
   // The lawn: after every fixed feature, whose colliders and platforms it grows around.
   // It has its own seeded generator, so it doesn't use (or shift) ctx.rand.
-  const grass = new Grass(ctx, { stones: [...steppingStones.footprints(), ...bowls.footprints()], density: grassDensity });
+  const grass = new Grass(ctx, {
+    stones: [...steppingStones.footprints(), ...bowls.footprints(), ...stream.footprints()], density: grassDensity,
+  });
 
   // Animals: after every collider is in place.
   const hearts = new Hearts(ctx);
   const dog = new Dog(ctx, { hearts, zenGarden, bowls });
-  const birds = new Birds(ctx, { perchSources: [lanterns, trees, torii, teaHouse, fence], dog });
+  const birds = new Birds(ctx, { perchSources: [lanterns, trees, torii, teaHouse, fence, stream], dog });
   const cats = new Cats(ctx, { dog, birds, hearts, zenGarden, bowls });
   // The birds watch out for the cats, but the cats need the birds (to stalk them), so
   // the birds are made first and told about the cats afterwards.
@@ -102,15 +116,15 @@ export function buildGarden(ctx, { anisotropy = 1, grassDensity = 1 } = {}) {
   // Butterflies land on the low things (flowers, stones, rocks) and take off when the
   // dog, a cat or the Gardener comes by.
   const butterflies = new Butterflies(ctx, {
-    landingSources: [flowers, steppingStones, rocks, zenGarden], teaHouse, scarers: [dog, ...cats.list, gardener],
+    landingSources: [flowers, steppingStones, rocks, zenGarden, stream], teaHouse, scarers: [dog, ...cats.list, gardener],
   });
   // The dog, the cats and the Gardener part the grass as they walk through it.
   grass.pushers = [dog, ...cats.list, gardener];
   const interaction = new Interaction({ dog, cats, feeding, gardener });
 
   return {
-    sky, ground, fuji, clouds, trees, lanterns, pond, ripples, bridge, torii, steppingStones,
-    teaHouse, zenGarden, shishi, fence, rocks, flowers, teaThings, bowls, grass,
+    sky, ground, fuji, clouds, mountains, forest, trees, lanterns, pond, ripples, bridge, torii, steppingStones,
+    teaHouse, zenGarden, shishi, fence, rocks, flowers, teaThings, bowls, stream, grass,
     feeding, koi, hearts, dog, birds, cats, gardener, butterflies, interaction,
   };
 }
