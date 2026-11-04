@@ -25,6 +25,10 @@ import * as THREE from 'three';
 // nothing happens until someone calls `new`. garden.js is the one place that does
 // (the "composition root"), in a deliberate order.
 const tmpV = new THREE.Vector3();
+// For landingOn(): one ray, reused, and a matrix for turning normals into world space.
+const downRay = new THREE.Raycaster();
+const DOWN = new THREE.Vector3(0, -1, 0);
+const normalMat = new THREE.Matrix3();
 
 export class Feature {
   // A subclass's constructor must call super(...) before it touches `this`.
@@ -70,5 +74,28 @@ export class Feature {
   platform(minX, maxX, minZ, maxZ, y) {
     const { x, z } = this.toWorld(0, 0);
     return this.ctx.physics.addPlatform(x + minX, x + maxX, z + minZ, z + maxZ, y);
+  }
+
+  // A spot a butterfly can land on: the top of `mesh`, (dx, dz) from its centre, as
+  // { point, normal, kind } in world coordinates, or null if that bit is too steep.
+  //
+  // Rather than working the top out from the geometry (hard for a rock tipped at a
+  // random angle), it *raycasts*: shoot a ray straight down from high above and ask
+  // where it first meets the mesh's triangles. This is the same test a mouse-picking
+  // ray uses. Testing just this one mesh keeps it cheap and stops it hitting anything else.
+  //
+  // The hit's face normal is in the mesh's own (object) space. Turning a direction into
+  // world space isn't quite the same as turning a point: under a non-uniform scale (the
+  // squashed zen rocks) the normal would no longer be perpendicular to the surface.
+  // The "normal matrix", the inverse transpose of the world matrix, transforms it correctly.
+  landingOn(mesh, dx = 0, dz = 0, kind = 'stone', minUp = 0.7) {
+    mesh.updateWorldMatrix(true, false);
+    const c = mesh.getWorldPosition(tmpV);
+    downRay.set(new THREE.Vector3(c.x + dx, c.y + 50, c.z + dz), DOWN);
+    const hit = downRay.intersectObject(mesh, false)[0];
+    if (!hit) return null;
+    const normal = hit.face.normal.clone().applyMatrix3(normalMat.getNormalMatrix(mesh.matrixWorld)).normalize();
+    if (normal.y < minUp) return null;
+    return { point: hit.point.clone(), normal, kind };
   }
 }

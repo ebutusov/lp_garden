@@ -25,6 +25,11 @@ export class SteppingStones extends Feature {
     stone.rotation.y = rand() * Math.PI;
   }
 
+  // Butterflies sun themselves on the stones' flat tops.
+  landings() {
+    return this.group.children.map((stone) => this.landingOn(stone, 0, 0, 'stone')).filter(Boolean);
+  }
+
   // Each stone's footprint { x, z, r } (the group sits at the origin, so these are world
   // coordinates). The grass keeps clear of them.
   footprints() {

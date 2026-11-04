@@ -56,6 +56,7 @@ export class ZenGarden extends Feature {
     const { rand } = ctx;
     this.w = w;
     this.d = d;
+    this.rocks = [];     // the rock meshes, for butterflies to land on
     this.prints = 0;     // footprints since the last raking
     this.dirty = false;  // has the canvas changed since the last upload?
     this.uploadT = 0;
@@ -91,6 +92,7 @@ export class ZenGarden extends Feature {
           rx, size * 0.45, rz, { cast: true, receive: true });
         rock.scale.set(1, 0.75, 0.9);
         rock.rotation.y = rand() * Math.PI;
+        this.rocks.push(rock);
         this.mesh(new THREE.CylinderGeometry(size * 1.15, size * 1.3, 0.06, 7), M.moss, rx, 0.13, rz);
         this.solidCircle(rx, rz, size * 0.9, size * 1.2);
       });
@@ -102,6 +104,11 @@ export class ZenGarden extends Feature {
     this.platform(-hw - 0.3, hw + 0.3, hd, hd + 0.3, 0.3);
     this.platform(-hw - 0.3, -hw, -hd, hd, 0.3);
     this.platform(hw, hw + 0.3, -hd, hd, 0.3);
+  }
+
+  // Butterflies land on the rocks (not the gravel: they're stones, not sand bathers).
+  landings() {
+    return this.rocks.map((rock) => this.landingOn(rock, 0, 0, 'rock')).filter(Boolean);
   }
 
   // Is the point (x, z) on the gravel? (For footstep sounds.)

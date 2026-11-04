@@ -13,13 +13,14 @@ import { setHelpVisible } from './ui/help.js';
 //   garden.setView({ x: 0, y: 12, z: 10, yaw: 0, pitch: -0.8, fly: true })
 // main.js installs them once the garden is built, handing over what they inspect.
 export function installDebug(garden, { physics }) {
-  const { trees, lanterns, pond, flowers, steppingStones, koi, feeding, dog, birds, cats, gardener, zenGarden, interaction, grass } = garden;
+  const { trees, lanterns, pond, flowers, steppingStones, koi, feeding, dog, birds, cats, gardener, butterflies, zenGarden, interaction, grass } = garden;
   const { solids, mounds } = physics;
   window.garden = {
     // What actually got placed (trees that found no room are skipped).
     layout: {
       trees: trees.list.length, cherries: trees.cherryCrowns.length, lanterns: lanterns.list.length,
       grassTufts: grass.count, grassTiles: grass.group.children.length,
+      butterflies: butterflies.list.length, butterflyLandings: butterflies.landings.length,
     },
     // The grass shader's current wind and pushers (player, dog, cats: x, z, radius, strength).
     grass: () => ({
@@ -76,6 +77,12 @@ export function installDebug(garden, { physics }) {
     birds: () => birds.list.map((b) => {
       const { x, y, z } = b.group.position;
       return { species: b.species, state: b.state, on: b.perch.kind, x, y, z };
+    }),
+    // Each butterfly: species, 'flying' or 'landed', the kind of spot it's on or heading
+    // for ('flower', 'stone', 'rock' or null), and where it is.
+    butterflies: () => butterflies.list.map((b) => {
+      const { x, y, z } = b.group.position;
+      return { species: b.species, state: b.state, on: b.spot?.kind ?? null, x, y, z };
     }),
     // How many pellets are on the water, and where the koi are (pond-local).
     pond() {
