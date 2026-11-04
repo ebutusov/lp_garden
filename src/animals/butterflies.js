@@ -95,6 +95,8 @@ class Butterfly extends Animal {
     this.goalT = 0;                   // ...until it picks another
     this.spot = null;                 // the landing spot it's heading for, or sitting on
     this.lastSpot = null;
+    this.bestD = Infinity;            // the closest it has come to `spot`...
+    this.stallT = 0;                  // ...and how long since it last got closer
     this.landYaw = 0;                 // which way it faces on the spot
     this.timer = 0;                   // flying: until it looks for somewhere to land; landed: until it leaves
     this.targetQ = new THREE.Quaternion();
@@ -187,9 +189,25 @@ class Butterfly extends Animal {
       if (w > bestW) { best = s; bestW = w; }
     }
     if (!best) { this.timer = 2; return; }
-    best.taken = this;
-    this.spot = best;
+    this.claim(best);
+  }
+
+  // Make `spot` the one it's heading for (and keep anyone else off it).
+  claim(spot) {
+    spot.taken = this;
+    this.spot = spot;
     this.landYaw = Math.random() * Math.PI * 2;
+    this.bestD = Infinity;
+    this.stallT = 0;
+  }
+
+  // Give up on the spot it was heading for (and don't pick it again straight away).
+  abandon() {
+    this.spot.taken = null;
+    this.lastSpot = this.spot;
+    this.spot = null;
+    this.timer = 3 + Math.random() * 5;
+    this.wander();
   }
 
   // Touch down: sit exactly on the spot.
@@ -238,6 +256,11 @@ class Butterfly extends Animal {
       const s = this.spot;
       dist = p.distanceTo(s.point);
       if (dist < 0.03) { this.settle(); return; }
+      // Steering is a sum of pushes, and pushes can cancel out: the goal pulling one way,
+      // a neighbouring rock pushing the other. Then it hovers in place forever. So it
+      // watches its own progress and gives up on a spot it hasn't got closer to lately.
+      if (dist < this.bestD - 0.05) { this.bestD = dist; this.stallT = 0; }
+      else if ((this.stallT += dt) > 4) { this.abandon(); return; }
       // Aim above the spot, at a point that sinks onto it as the butterfly arrives,
       // so it comes down from above rather than skimming in sideways.
       target = tmpB.copy(s.point).addScaledVector(s.normal, Math.min(0.5, dist * 0.4));
@@ -256,7 +279,9 @@ class Butterfly extends Animal {
     desired.x += Math.cos(this.wob) * 0.9 * calm;
     desired.z += Math.sin(this.wob) * 0.9 * calm;
     desired.y += Math.sin(t * 2.3 + this.seed * 9) * 0.6 * calm;
-    this.avoid(desired, target);
+    // On the last stretch it's coming down from above onto its own rock, so it stops
+    // shying away from the neighbouring ones (whose push would hold it off the spot).
+    this.avoid(desired, target, this.spot ? clamp(dist - 0.3, 0, 1) : 1);
     // Ease the velocity towards the desired one: the lag is what makes it look like
     // a light body pushed about by its wings, rather than a point on a rail.
     this.vel.lerp(desired, Math.min(1, dt * 3));
@@ -289,8 +314,9 @@ class Butterfly extends Animal {
   }
 
   // Steer around anything taller than it's flying, except the collider its target is
-  // on (the rock it's landing on). The push grows as the gap closes.
-  avoid(desired, target) {
+  // on (the rock it's landing on). The push grows as the gap closes; `strength` scales it.
+  avoid(desired, target, strength = 1) {
+    if (strength <= 0) return;
     const p = this.group.position;
     for (const s of this.ctx.physics.solids) {
       if (s.h < p.y - 0.1 || insideSolid(s, target.x, target.z)) continue;
@@ -305,7 +331,7 @@ class Butterfly extends Animal {
       if (gap > 1) continue;
       const d = Math.hypot(dx, dz);
       if (d < 1e-4) continue;
-      const push = (1 - gap) * 3 / d;
+      const push = (1 - gap) * 3 * strength / d;
       desired.x += dx * push;
       desired.z += dz * push;
     }
@@ -381,9 +407,7 @@ export class Butterflies extends Feature {
       // Start half of them resting and half already on the wing.
       const free = this.landings.filter((s) => !s.taken);
       if (!free.length) return b;
-      b.spot = free[Math.floor(Math.random() * free.length)];
-      b.spot.taken = b;
-      b.landYaw = Math.random() * Math.PI * 2;
+      b.claim(free[Math.floor(Math.random() * free.length)]);
       b.settle();
       b.group.quaternion.copy(b.landedQuat(b.targetQ));
       b.timer = Math.random() * 10;

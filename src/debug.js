@@ -104,10 +104,29 @@ export function installDebug(garden, { physics }) {
     }),
     // Each butterfly: species, 'flying' or 'landed', the kind of spot it's on or heading
     // for ('flower', 'stone', 'rock' or null), and where it is.
+    // `d` is how far it still has to go to its spot (0 once landed).
     butterflies: () => butterflies.list.map((b) => {
       const { x, y, z } = b.group.position;
-      return { species: b.species, state: b.state, on: b.spot?.kind ?? null, x, y, z };
+      const d = b.spot ? Math.round(b.group.position.distanceTo(b.spot.point) * 100) / 100 : null;
+      return { species: b.species, state: b.state, on: b.spot?.kind ?? null, d, x, y, z };
     }),
+    // Send every butterfly to a free landing spot of one kind ('flower', 'stone', 'rock'),
+    // taking off from wherever it is; `near` (x, z) limits it to spots within 8 of there.
+    // Returns how many were sent.
+    landAt(kind, near = null) {
+      const free = butterflies.landings.filter((s) => !s.taken && s.kind === kind
+        && (!near || Math.hypot(s.point.x - near.x, s.point.z - near.z) < 8));
+      let sent = 0;
+      for (const b of butterflies.list) {
+        const s = free.shift();
+        if (!s) break;
+        if (b.state === 'landed') b.takeOff();
+        if (b.spot) b.spot.taken = null;
+        b.claim(s);
+        sent++;
+      }
+      return sent;
+    },
     // How many pellets are on the water, and where the koi are (pond-local).
     pond() {
       return { pellets: feeding.pellets.length, koi: koi.list.map((k) => ({ x: k.x, z: k.z })) };
