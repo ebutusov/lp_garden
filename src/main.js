@@ -45,7 +45,7 @@ const garden = buildGarden(ctx, {
   grassDensity: matchMedia('(pointer: coarse)').matches ? 0.5 : 1,
 });
 const {
-  sky, grass, pond, koi, feeding, ripples, trees, shishi, dog, hearts, birds, cats, gardener, teaThings, bowls, zenGarden, clouds, lanterns,
+  sky, grass, pond, koi, feeding, ripples, trees, shishi, dog, hearts, birds, cats, gardener, butterflies, teaThings, bowls, zenGarden, clouds, lanterns,
 } = garden;
 
 // Hand the function modules the parts of the garden they need.
@@ -92,6 +92,7 @@ function animate() {
   cats.update(dt, t);
   gardener.update(dt, t);
   bowls.update(dt);     // raises the level of a bowl being filled
+  butterflies.update(dt, t);
   zenGarden.update(dt); // uploads the gravel texture if footprints or raking changed it
   teaThings.update(dt, t);
   updateFireflies(t);
