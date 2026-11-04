@@ -87,11 +87,7 @@ Every file in `src/world/` exports a class that extends `Feature` (`src/world/fe
 
 - **Construction order is layout order.** `buildGarden()` in `garden.js` creates everything in a deliberate order (import order no longer matters), for two reasons:
   - **Layout:** whatever draws from `ctx.rand` must be built in the order ground (mounds) → trees → pond (lily pads) → koi → stepping stones → zen garden → rocks → flowers. The koi are built in that slot, before the other animals. `fingerprint()` also hashes colliders in the order they were added, so keep the whole order. Check `garden.fingerprint()` after reordering. Inside a constructor, keep the order of the `rand()` calls too.
-<<<<<<< HEAD
-  - **Spawning:** every feature that adds colliders must be built before the dog, birds and cats, because animals pick their starting spots by avoiding them. The Gardener is built last; `fingerprint()` leaves his collider out, like the animals', and also the bowls' (`bowls.solids`), which were added after the layout was fixed.
-=======
-  - **Spawning:** every feature that adds colliders must be built before the dog, birds and cats, because animals pick their starting spots by avoiding them. The Gardener is built after the other animals; `fingerprint()` leaves his collider out, like the animals'. The butterflies come after him: they add no colliders, use only `Math.random`, and are handed him as a scarer.
->>>>>>> origin/main
+  - **Spawning:** every feature that adds colliders must be built before the dog, birds and cats, because animals pick their starting spots by avoiding them. The Gardener is built after the other animals; `fingerprint()` leaves his collider out, like the animals', and also the bowls' (`bowls.solids`), which were added after the layout was fixed. The butterflies come after him: they add no colliders, use only `Math.random`, and are handed him as a scarer.
 - **Shared mutable state** lives in objects, because importers can't assign to an exported `let`. Day/night is `env.isNight` and `env.nightMix` (0 to 1); anything with a night look reads `env.nightMix`. The player's `yaw`, `pitch`, `flyMode`, `verticalVel` and `onGround` live on `player`. Both are in `src/core/state.js`.
 - **Mutual references are wired after construction.** The cats need the birds (to stalk them) and the birds need the cats (to flee them), so `garden.js` builds the birds, then the cats, then sets `birds.cats = cats`.
 
@@ -122,21 +118,13 @@ Fixed features are positioned by the constants in `src/core/layout.js`, such as 
 
 ### Animals
 
-<<<<<<< HEAD
-Each animal is a class and a small state machine with its own `update(dt, t)`. The dog, cats and birds extend `Animal` (`animals/animal.js`), a `Feature` whose group is the body's root. It adds `blob()` for body parts, an optional collision circle (`this.solid`, kept in step with `syncSolid()`), `blocked(x, z, ignore)`, `groundAt(x, z)` and `freeHeading()` for feeler steering. It also does the bowls: `hunger` and `thirst` creep up to 1, then `findMeal(reach, dt)` picks a bowl and seat, `mealGoal(dt, arrive)` walks the route (giving up, with a cool-down in `mealWait`, when it stops making progress), and `eatFrom()` drains the bowl. Groups of animals are collections with a `list` (`koi.list`, `cats.list`, `birds.list`).
-=======
-Each animal is a class and a small state machine with its own `update(dt, t)`. The dog, cats, birds and butterflies extend `Animal` (`animals/animal.js`), a `Feature` whose group is the body's root. It adds `blob()` for body parts, an optional collision circle (`this.solid`, kept in step with `syncSolid()`), `blocked(x, z)`, `groundAt(x, z)` and `freeHeading()` for feeler steering. Groups of animals are collections with a `list` (`koi.list`, `cats.list`, `birds.list`, `butterflies.list`).
->>>>>>> origin/main
+Each animal is a class and a small state machine with its own `update(dt, t)`. The dog, cats, birds and butterflies extend `Animal` (`animals/animal.js`), a `Feature` whose group is the body's root. It adds `blob()` for body parts, an optional collision circle (`this.solid`, kept in step with `syncSolid()`), `blocked(x, z, ignore)`, `groundAt(x, z)` and `freeHeading()` for feeler steering. It also does the bowls: `hunger` and `thirst` creep up to 1, then `findMeal(reach, dt)` picks a bowl and seat, `mealGoal(dt, arrive)` walks the route (giving up, with a cool-down in `mealWait`, when it stops making progress), and `eatFrom()` drains the bowl. Groups of animals are collections with a `list` (`koi.list`, `cats.list`, `birds.list`, `butterflies.list`).
 
 - **Koi:** `KoiSchool` of `Koi`, inside the pond's group. Steering with separation plus a hard push-apart, so the school doesn't merge when fed. Food comes from `Feeding` (`feeding.pellets`, `feeding.tryFeed()` for the player, `feeding.drop(lx, lz)` to scatter food at a pond-local point).
 - **Dog:** `Dog`, a Shiba Inu. `dog.pet(by)`: petted by the player (`by` null) or by someone it then follows for a while (`dog.leader`, `dog.followT`). `dog.hold(by, seconds)` makes it sit and wait for `by`, unless it's with the player. `Dog.PET_R` is its petting reach. When hungry or thirsty it goes into state `'bowl'` (from wander, or a rest nobody asked for).
 - **Birds:** `Birds` flock of `Bird`. They perch on whatever the perch sources' `perches()` offer, convert those points with `localToWorld`, and fly along Bézier paths. The player, the dog and non-stalking cats scare them off. `bird.takeOff(scaredBy)`.
-<<<<<<< HEAD
 - **Cats:** `Cats` of `Cat`. They sit, groom, loaf, stalk, pounce and flee from the dog. They turn in place before moving, via `cat.steer()`. `cat.pet(by)` returns false when the cat walks off (away from `by`, or from the player). `cat.settled` (sitting, grooming or napping) and `cat.hold(seconds)` let someone walk up to it. Hungry or thirsty cats go to state `'bowl'` from wander, but not while the dog is within 6 of the bowl, and groom afterwards.
-=======
-- **Cats:** `Cats` of `Cat`. They sit, groom, loaf, stalk, pounce and flee from the dog. They turn in place before moving, via `cat.steer()`. `cat.pet(by)` returns false when the cat walks off (away from `by`, or from the player). `cat.settled` (sitting, grooming or napping) and `cat.hold(seconds)` let someone walk up to it.
 - **Butterflies:** `Butterflies` of `Butterfly`, six species whose wing colours are vertex colours baked into one fan geometry per species (all share one material). They fly by steering (desired velocity towards a goal plus a drifting flutter, eased in), not along Bézier paths: they wander between waypoints, steer round solids taller than they fly (except the one under their landing spot) and keep above `floorAt()`. Then they claim a free spot from `butterflies.landings` (flowers weighted 3×), descend onto it and rest aligned to its surface normal, basking now and then. The player within `SCARE_R`, or `butterflies.scarers` (dog, cats, Gardener) within `SCARE_ANIMAL_R`, makes them take off. At night (`env.nightMix > 0.5`) they land on the nearest free spot and stay.
->>>>>>> origin/main
 
 ### The Gardener
 
