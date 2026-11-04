@@ -28,7 +28,7 @@ Verify changes in a real browser by scripting the page through `window.garden`, 
 | `setSound` | Turn sound on or off |
 | `feed()` | Feed the koi |
 | `pet()` | Pet the nearest animal; returns `'dog'`, `'cat'`, `'cat:aloof'` or `null` |
-| `dog()`, `cats()`, `birds()`, `pond()` | Snapshot each animal's state |
+| `dog()`, `cats()`, `birds()`, `butterflies()`, `pond()` | Snapshot each animal's state |
 | `gardener()` | Snapshot the Gardener: activity, pose, position, whether he holds the rake or a cup |
 | `zenPrints()` | Footprints in the gravel since it was last raked |
 | `gardenerDo(name)` / `greet()` | Start an activity (`'admire'`, `'view'`, `'tea'`, `'feed'`, `'rake'`, `'pet'`) / greet him as the E key does |
@@ -64,6 +64,7 @@ Every file in `src/world/` exports a class that extends `Feature` (`src/world/fe
 - **`update(dt, t)`:** called from `animate()`, each in its fixed slot. The base version does nothing, so static features don't define one.
 - **Helpers:** use them instead of repeating the boilerplate. `this.mesh(geo, mat, x, y, z, { cast, receive, parent })` makes a mesh and adds it to the group; the shadow flags default to `false`. `solidCircle`, `solidBox` and `platform` take local coordinates and register colliders in world coordinates through `this.ctx.physics`. Boxes only work for groups that aren't rotated. Use `this.ctx.rand` and `this.ctx.placement` for random placement.
 - **Collections:** trees and lanterns are made of smaller objects. `trees.list` holds `Tree` objects (`PineTree`, `MapleTree` and `CherryTree`), each with its own `crown` and `sway()`. `lanterns.list` holds `Lantern` objects; their shared night brightness is `lanterns.brightness`, which `dayNight.js` sets.
+- **Butterfly landings:** low things butterflies land on (`Flowers`, `Rocks`, `SteppingStones`, `ZenGarden`) have `landings()`, returning `[{ point, normal, kind }]` in world coordinates. They build them with `this.landingOn(mesh, dx, dz, kind)`, which raycasts down onto that one mesh and rejects facets steeper than `minUp`. Pass a new landing source to `Butterflies` in `garden.js`.
 - **Bird perches:** anything birds sit on (`Tree`, `Lantern`, `Torii`, `TeaHouse`, `Fence`, and the `Trees`/`Lanterns` collections) has `perches()`, returning `[{ parent, local, kind }]` in the parent's local frame. Pass a new perch source to `Birds` in `garden.js`.
 - **Zen garden texture:** the raked pattern is a live canvas. `zenGarden.footprint(x, z, heading, size, paw)` paints a print. The player's steps (`player/footsteps.js`) and the dog's and cats' paws (`Animal.stepPrint`, given `zenGarden`) make them. `zenGarden.smooth()` copies a pristine copy back, and `zenGarden.update(dt)` uploads changes at most every 0.15 s. `zenGarden.prints` counts them.
 - **APIs:** use `ripples.spawn(lx, lz, size, life)` to make a ripple, `pond.group` for the pond-local frame (`pond.radius` for its size), and `teaHouse.contains(x, z)` / `zenGarden.contains(x, z)` to test whether a point is inside.
@@ -74,7 +75,7 @@ Every file in `src/world/` exports a class that extends `Feature` (`src/world/fe
 | `src/core/` | `scene`, `camera` (+ `cameraGroup`), `renderer` (+ `composer`, `bloom`), `lights`, `materials` (`M`, `mat`), `textures`, `layout` (constants), `placement` (`Placement`), `physics` (`Physics`), `random` (`mulberry32`, `SEED`), `clock`, `state` |
 | `src/world/` | One file per garden feature |
 | `src/effects/` | `petals`, `fireflies`, `dayNight` |
-| `src/animals/` | `animal` (base class), `koi`, `feeding`, `dog`, `birds`, `cats`, `hearts`, `interaction` |
+| `src/animals/` | `animal` (base class), `koi`, `feeding`, `dog`, `birds`, `cats`, `butterflies`, `hearts`, `interaction` |
 | `src/people/` | `gardener` |
 | `src/player/` | `look`, `movement`, `flight`, `footsteps` |
 | `src/input/`, `src/ui/`, `src/audio/` | Controls, HUD and help screen, sound |
@@ -83,7 +84,7 @@ Every file in `src/world/` exports a class that extends `Feature` (`src/world/fe
 
 - **Construction order is layout order.** `buildGarden()` in `garden.js` creates everything in a deliberate order (import order no longer matters), for two reasons:
   - **Layout:** whatever draws from `ctx.rand` must be built in the order ground (mounds) → trees → pond (lily pads) → koi → stepping stones → zen garden → rocks → flowers. The koi are built in that slot, before the other animals. `fingerprint()` also hashes colliders in the order they were added, so keep the whole order. Check `garden.fingerprint()` after reordering. Inside a constructor, keep the order of the `rand()` calls too.
-  - **Spawning:** every feature that adds colliders must be built before the dog, birds and cats, because animals pick their starting spots by avoiding them. The Gardener is built last; `fingerprint()` leaves his collider out, like the animals'.
+  - **Spawning:** every feature that adds colliders must be built before the dog, birds and cats, because animals pick their starting spots by avoiding them. The Gardener is built after the other animals; `fingerprint()` leaves his collider out, like the animals'. The butterflies come after him: they add no colliders, use only `Math.random`, and are handed him as a scarer.
 - **Shared mutable state** lives in objects, because importers can't assign to an exported `let`. Day/night is `env.isNight` and `env.nightMix` (0 to 1); anything with a night look reads `env.nightMix`. The player's `yaw`, `pitch`, `flyMode`, `verticalVel` and `onGround` live on `player`. Both are in `src/core/state.js`.
 - **Mutual references are wired after construction.** The cats need the birds (to stalk them) and the birds need the cats (to flee them), so `garden.js` builds the birds, then the cats, then sets `birds.cats = cats`.
 
@@ -114,12 +115,13 @@ Fixed features are positioned by the constants in `src/core/layout.js`, such as 
 
 ### Animals
 
-Each animal is a class and a small state machine with its own `update(dt, t)`. The dog, cats and birds extend `Animal` (`animals/animal.js`), a `Feature` whose group is the body's root. It adds `blob()` for body parts, an optional collision circle (`this.solid`, kept in step with `syncSolid()`), `blocked(x, z)`, `groundAt(x, z)` and `freeHeading()` for feeler steering. Groups of animals are collections with a `list` (`koi.list`, `cats.list`, `birds.list`).
+Each animal is a class and a small state machine with its own `update(dt, t)`. The dog, cats, birds and butterflies extend `Animal` (`animals/animal.js`), a `Feature` whose group is the body's root. It adds `blob()` for body parts, an optional collision circle (`this.solid`, kept in step with `syncSolid()`), `blocked(x, z)`, `groundAt(x, z)` and `freeHeading()` for feeler steering. Groups of animals are collections with a `list` (`koi.list`, `cats.list`, `birds.list`, `butterflies.list`).
 
 - **Koi:** `KoiSchool` of `Koi`, inside the pond's group. Steering with separation plus a hard push-apart, so the school doesn't merge when fed. Food comes from `Feeding` (`feeding.pellets`, `feeding.tryFeed()` for the player, `feeding.drop(lx, lz)` to scatter food at a pond-local point).
 - **Dog:** `Dog`, a Shiba Inu. `dog.pet(by)`: petted by the player (`by` null) or by someone it then follows for a while (`dog.leader`, `dog.followT`). `dog.hold(by, seconds)` makes it sit and wait for `by`, unless it's with the player. `Dog.PET_R` is its petting reach.
 - **Birds:** `Birds` flock of `Bird`. They perch on whatever the perch sources' `perches()` offer, convert those points with `localToWorld`, and fly along Bézier paths. The player, the dog and non-stalking cats scare them off. `bird.takeOff(scaredBy)`.
 - **Cats:** `Cats` of `Cat`. They sit, groom, loaf, stalk, pounce and flee from the dog. They turn in place before moving, via `cat.steer()`. `cat.pet(by)` returns false when the cat walks off (away from `by`, or from the player). `cat.settled` (sitting, grooming or napping) and `cat.hold(seconds)` let someone walk up to it.
+- **Butterflies:** `Butterflies` of `Butterfly`, six species whose wing colours are vertex colours baked into one fan geometry per species (all share one material). They fly by steering (desired velocity towards a goal plus a drifting flutter, eased in), not along Bézier paths: they wander between waypoints, steer round solids taller than they fly (except the one under their landing spot) and keep above `floorAt()`. Then they claim a free spot from `butterflies.landings` (flowers weighted 3×), descend onto it and rest aligned to its surface normal, basking now and then. The player within `SCARE_R`, or `butterflies.scarers` (dog, cats, Gardener) within `SCARE_ANIMAL_R`, makes them take off. At night (`env.nightMix > 0.5`) they land on the nearest free spot and stay.
 
 ### The Gardener
 

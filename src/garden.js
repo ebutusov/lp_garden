@@ -27,6 +27,7 @@ import { Hearts } from './animals/hearts.js';
 import { Dog } from './animals/dog.js';
 import { Birds } from './animals/birds.js';
 import { Cats } from './animals/cats.js';
+import { Butterflies } from './animals/butterflies.js';
 import { Interaction } from './animals/interaction.js';
 import { Gardener } from './people/gardener.js';
 
@@ -48,6 +49,8 @@ import { Gardener } from './people/gardener.js';
 //     feature that adds colliders must be built before them. (The koi are the
 //     exception: they swim in the pond, avoid nothing, but draw from ctx.rand, so they
 //     are built in their slot in the random sequence.)
+//     The butterflies come after everything, even the Gardener: they add no colliders
+//     and draw only from Math.random, and they need the Gardener to shy away from.
 //
 // `ctx` is the shared context: { scene, physics, placement, rand }.
 export function buildGarden(ctx, { anisotropy = 1, grassDensity = 1 } = {}) {
@@ -86,9 +89,15 @@ export function buildGarden(ctx, { anisotropy = 1, grassDensity = 1 } = {}) {
   // the birds are made first and told about the cats afterwards.
   birds.cats = cats;
   // The Gardener looks after all of it, so he's handed most of the garden. He draws
-  // only from Math.random, so building him last leaves the layout alone.
+  // only from Math.random, so building him after everything that uses ctx.rand leaves
+  // the layout alone.
   const gardener = new Gardener(ctx, {
     teaHouse, teaThings, zenGarden, pond, feeding, trees, flowers, fuji, dog, cats, fenceR: FENCE_R,
+  });
+  // Butterflies land on the low things (flowers, stones, rocks) and take off when the
+  // dog, a cat or the Gardener comes by.
+  const butterflies = new Butterflies(ctx, {
+    landingSources: [flowers, steppingStones, rocks, zenGarden], teaHouse, scarers: [dog, ...cats.list, gardener],
   });
   // The dog, the cats and the Gardener part the grass as they walk through it.
   grass.pushers = [dog, ...cats.list, gardener];
@@ -97,6 +106,6 @@ export function buildGarden(ctx, { anisotropy = 1, grassDensity = 1 } = {}) {
   return {
     sky, ground, fuji, clouds, trees, lanterns, pond, ripples, bridge, torii, steppingStones,
     teaHouse, zenGarden, shishi, fence, rocks, flowers, teaThings, grass,
-    feeding, koi, hearts, dog, birds, cats, gardener, interaction,
+    feeding, koi, hearts, dog, birds, cats, gardener, butterflies, interaction,
   };
 }
