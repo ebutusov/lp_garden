@@ -31,7 +31,9 @@ Verify changes in a real browser by scripting the page through `window.garden`, 
 | `dog()`, `cats()`, `birds()`, `butterflies()`, `pond()` | Snapshot each animal's state |
 | `gardener()` | Snapshot the Gardener: activity, pose, position, whether he holds the rake or a cup |
 | `zenPrints()` | Footprints in the gravel since it was last raked |
-| `gardenerDo(name)` / `greet()` | Start an activity (`'admire'`, `'view'`, `'tea'`, `'feed'`, `'rake'`, `'pet'`) / greet him as the E key does |
+| `bowls()` / `setBowls(level)` | Each pet bowl's level (0 to 1) and who is eating there / set every bowl's level |
+| `hungry(what)` | Make the dog and cats hungry (`'hunger'`), thirsty (`'thirst'`) or both (no argument), so they head for the bowls |
+| `gardenerDo(name)` / `greet()` | Start an activity (`'admire'`, `'view'`, `'tea'`, `'feed'`, `'rake'`, `'pet'`, `'fill'`) / greet him as the E key does |
 | `moveDog(x, z)` | Move the dog somewhere |
 | `layout` | Counts of what got placed |
 | `fingerprint()` | Hash of everything `rand()` placed. Currently `4d19f052`; if a change alters it, the layout changed |
@@ -67,6 +69,7 @@ Every file in `src/world/` exports a class that extends `Feature` (`src/world/fe
 - **Butterfly landings:** low things butterflies land on (`Flowers`, `Rocks`, `SteppingStones`, `ZenGarden`) have `landings()`, returning `[{ point, normal, kind }]` in world coordinates. They build them with `this.landingOn(mesh, dx, dz, kind)`, which raycasts down onto that one mesh and rejects facets steeper than `minUp`. Pass a new landing source to `Butterflies` in `garden.js`.
 - **Bird perches:** anything birds sit on (`Tree`, `Lantern`, `Torii`, `TeaHouse`, `Fence`, and the `Trees`/`Lanterns` collections) has `perches()`, returning `[{ parent, local, kind }]` in the parent's local frame. Pass a new perch source to `Birds` in `garden.js`.
 - **Zen garden texture:** the raked pattern is a live canvas. `zenGarden.footprint(x, z, heading, size, paw)` paints a print. The player's steps (`player/footsteps.js`) and the dog's and cats' paws (`Animal.stepPrint`, given `zenGarden`) make them. `zenGarden.smooth()` copies a pristine copy back, and `zenGarden.update(dt)` uploads changes at most every 0.15 s. `zenGarden.prints` counts them.
+- **Pet bowls:** `Bowls` (`world/bowls.js`, at `BOWLS` along the tea house's south wall) holds `list`/`byKind` of `{ kind: 'dog' | 'cat' | 'water', level, x, z, solid }`, plus a kibble bin and a water `bucket`. `take(bowl, amount)` eats from one, `fill(bowl)` tops it up (the level rises in `bowls.update`), and `seat(bowl, animal, reach)` finds a free place at it. Who is eating where is never stored: `taken()` asks `bowls.eaters` (the dog and cats, set in `garden.js`) for state `'bowl'` and their `meal`. `route(x, z, bowl)` gives waypoints round the pond's south end and the tea house. Build it before the grass, which keeps clear of `bowls.footprints()`.
 - **APIs:** use `ripples.spawn(lx, lz, size, life)` to make a ripple, `pond.group` for the pond-local frame (`pond.radius` for its size), and `teaHouse.contains(x, z)` / `zenGarden.contains(x, z)` to test whether a point is inside.
 
 | Folder | Contents |
@@ -84,7 +87,11 @@ Every file in `src/world/` exports a class that extends `Feature` (`src/world/fe
 
 - **Construction order is layout order.** `buildGarden()` in `garden.js` creates everything in a deliberate order (import order no longer matters), for two reasons:
   - **Layout:** whatever draws from `ctx.rand` must be built in the order ground (mounds) → trees → pond (lily pads) → koi → stepping stones → zen garden → rocks → flowers. The koi are built in that slot, before the other animals. `fingerprint()` also hashes colliders in the order they were added, so keep the whole order. Check `garden.fingerprint()` after reordering. Inside a constructor, keep the order of the `rand()` calls too.
+<<<<<<< HEAD
+  - **Spawning:** every feature that adds colliders must be built before the dog, birds and cats, because animals pick their starting spots by avoiding them. The Gardener is built last; `fingerprint()` leaves his collider out, like the animals', and also the bowls' (`bowls.solids`), which were added after the layout was fixed.
+=======
   - **Spawning:** every feature that adds colliders must be built before the dog, birds and cats, because animals pick their starting spots by avoiding them. The Gardener is built after the other animals; `fingerprint()` leaves his collider out, like the animals'. The butterflies come after him: they add no colliders, use only `Math.random`, and are handed him as a scarer.
+>>>>>>> origin/main
 - **Shared mutable state** lives in objects, because importers can't assign to an exported `let`. Day/night is `env.isNight` and `env.nightMix` (0 to 1); anything with a night look reads `env.nightMix`. The player's `yaw`, `pitch`, `flyMode`, `verticalVel` and `onGround` live on `player`. Both are in `src/core/state.js`.
 - **Mutual references are wired after construction.** The cats need the birds (to stalk them) and the birds need the cats (to flee them), so `garden.js` builds the birds, then the cats, then sets `birds.cats = cats`.
 
@@ -115,13 +122,21 @@ Fixed features are positioned by the constants in `src/core/layout.js`, such as 
 
 ### Animals
 
+<<<<<<< HEAD
+Each animal is a class and a small state machine with its own `update(dt, t)`. The dog, cats and birds extend `Animal` (`animals/animal.js`), a `Feature` whose group is the body's root. It adds `blob()` for body parts, an optional collision circle (`this.solid`, kept in step with `syncSolid()`), `blocked(x, z, ignore)`, `groundAt(x, z)` and `freeHeading()` for feeler steering. It also does the bowls: `hunger` and `thirst` creep up to 1, then `findMeal(reach, dt)` picks a bowl and seat, `mealGoal(dt, arrive)` walks the route (giving up, with a cool-down in `mealWait`, when it stops making progress), and `eatFrom()` drains the bowl. Groups of animals are collections with a `list` (`koi.list`, `cats.list`, `birds.list`).
+=======
 Each animal is a class and a small state machine with its own `update(dt, t)`. The dog, cats, birds and butterflies extend `Animal` (`animals/animal.js`), a `Feature` whose group is the body's root. It adds `blob()` for body parts, an optional collision circle (`this.solid`, kept in step with `syncSolid()`), `blocked(x, z)`, `groundAt(x, z)` and `freeHeading()` for feeler steering. Groups of animals are collections with a `list` (`koi.list`, `cats.list`, `birds.list`, `butterflies.list`).
+>>>>>>> origin/main
 
 - **Koi:** `KoiSchool` of `Koi`, inside the pond's group. Steering with separation plus a hard push-apart, so the school doesn't merge when fed. Food comes from `Feeding` (`feeding.pellets`, `feeding.tryFeed()` for the player, `feeding.drop(lx, lz)` to scatter food at a pond-local point).
-- **Dog:** `Dog`, a Shiba Inu. `dog.pet(by)`: petted by the player (`by` null) or by someone it then follows for a while (`dog.leader`, `dog.followT`). `dog.hold(by, seconds)` makes it sit and wait for `by`, unless it's with the player. `Dog.PET_R` is its petting reach.
+- **Dog:** `Dog`, a Shiba Inu. `dog.pet(by)`: petted by the player (`by` null) or by someone it then follows for a while (`dog.leader`, `dog.followT`). `dog.hold(by, seconds)` makes it sit and wait for `by`, unless it's with the player. `Dog.PET_R` is its petting reach. When hungry or thirsty it goes into state `'bowl'` (from wander, or a rest nobody asked for).
 - **Birds:** `Birds` flock of `Bird`. They perch on whatever the perch sources' `perches()` offer, convert those points with `localToWorld`, and fly along Bézier paths. The player, the dog and non-stalking cats scare them off. `bird.takeOff(scaredBy)`.
+<<<<<<< HEAD
+- **Cats:** `Cats` of `Cat`. They sit, groom, loaf, stalk, pounce and flee from the dog. They turn in place before moving, via `cat.steer()`. `cat.pet(by)` returns false when the cat walks off (away from `by`, or from the player). `cat.settled` (sitting, grooming or napping) and `cat.hold(seconds)` let someone walk up to it. Hungry or thirsty cats go to state `'bowl'` from wander, but not while the dog is within 6 of the bowl, and groom afterwards.
+=======
 - **Cats:** `Cats` of `Cat`. They sit, groom, loaf, stalk, pounce and flee from the dog. They turn in place before moving, via `cat.steer()`. `cat.pet(by)` returns false when the cat walks off (away from `by`, or from the player). `cat.settled` (sitting, grooming or napping) and `cat.hold(seconds)` let someone walk up to it.
 - **Butterflies:** `Butterflies` of `Butterfly`, six species whose wing colours are vertex colours baked into one fan geometry per species (all share one material). They fly by steering (desired velocity towards a goal plus a drifting flutter, eased in), not along Bézier paths: they wander between waypoints, steer round solids taller than they fly (except the one under their landing spot) and keep above `floorAt()`. Then they claim a free spot from `butterflies.landings` (flowers weighted 3×), descend onto it and rest aligned to its surface normal, basking now and then. The player within `SCARE_R`, or `butterflies.scarers` (dog, cats, Gardener) within `SCARE_ANIMAL_R`, makes them take off. At night (`env.nightMix > 0.5`) they land on the nearest free spot and stay.
+>>>>>>> origin/main
 
 ### The Gardener
 
@@ -129,7 +144,7 @@ Each animal is a class and a small state machine with its own `update(dt, t)`. T
 
 - **Poses:** a `POSES` table of joint angles plus an `overlay` of gesture offsets, eased each frame. The walk cycle goes on top, driven by the distance he actually moved. The hip height comes from the leg angles, so his feet stay on the ground.
 - **Movement:** his own `blocked()` lets him onto the gravel and into the tea house, but never onto the bridge (`BRIDGE_*` padded by 1). Feelers check a near and a far point. A blocked step slides along the obstacle. `detour()` steers him round the bridge's ends when the straight line would cross it. `walkTo` gives up when he stops making progress. He waits for the player rather than walking through them.
-- **Activities:** tea (in through `teaHouse.visitPath`, kneels at `teaHouse.seat`, sips from `teaThings.nearestCup()`; at night, when `env.nightMix > 0.5`, he stays until morning), admire a tree or a flower (`flowers.spots`), view Fuji, feed the koi, pet the dog or a cat, rake. Raking is symbolic: he fetches the rake from beside the gravel, calls `zenGarden.smooth()` to clear every footprint at once, then steps backwards along a few lines. He rakes more often once there are 8 or more prints. He leaves no prints himself.
+- **Activities:** tea (in through `teaHouse.visitPath`, kneels at `teaHouse.seat`, sips from `teaThings.nearestCup()`; at night, when `env.nightMix > 0.5`, he stays until morning), admire a tree or a flower (`flowers.spots`), view Fuji, feed the koi, pet the dog or a cat, rake. Raking is symbolic: he fetches the rake from beside the gravel, calls `zenGarden.smooth()` to clear every footprint at once, then steps backwards along a few lines. He rakes more often once there are 8 or more prints. He leaves no prints himself. Fill (`*fill()`): when a bowl drops below 0.6 (and much more likely below 0.25) he scoops kibble from the bin into his pouch and fills the food bowls, then carries the bucket (`bucketHeld`, eased like the cup in `animateBucket`) to the water bowl and back, and stands by to watch who comes. He skips the dog while it eats.
 - **Player:** E within `Gardener.GREET_R` calls `gardener.greet()`. He pauses his activity, turns (unless kneeling or crouching) and bows.
 
 `Interaction` in `interaction.js` (E key or ✋ button) decides in `tryInteract()` between greeting the Gardener, petting and feeding. `nearestPettable()` picks the closest animal in reach, and `nearest()` also considers the Gardener; both return `{ kind, animal }`.

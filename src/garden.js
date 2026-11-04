@@ -1,5 +1,5 @@
 import {
-  GROUND_R, POND_Z, POND_R, FENCE_R, FENCE_GAP, FENCE_H, TEA, TEA_PATH, ZEN, SHISHI, TORII_Z,
+  GROUND_R, POND_Z, POND_R, FENCE_R, FENCE_GAP, FENCE_H, TEA, TEA_PATH, BOWLS, ZEN, SHISHI, TORII_Z,
   LANTERN_SPOTS, PATH_LANTERN_SPOTS, PATH_LANTERN_SCALE, PATH_LANTERN_GLOW, TREE_SPOTS, FUJI_POS,
 } from './core/layout.js';
 import { Sky } from './world/sky.js';
@@ -20,6 +20,7 @@ import { Fence } from './world/fence.js';
 import { Rocks } from './world/rocks.js';
 import { Flowers } from './world/flowers.js';
 import { TeaThings } from './world/teaThings.js';
+import { Bowls } from './world/bowls.js';
 import { Grass } from './world/grass.js';
 import { Feeding } from './animals/feeding.js';
 import { KoiSchool } from './animals/koi.js';
@@ -76,23 +77,27 @@ export function buildGarden(ctx, { anisotropy = 1, grassDensity = 1 } = {}) {
   const rocks = new Rocks(ctx);
   const flowers = new Flowers(ctx);
   const teaThings = new TeaThings(ctx, { house: teaHouse });
+  // The pets' bowls by the tea house. Fixed, so they draw nothing from ctx.rand.
+  const bowls = new Bowls(ctx, { x: BOWLS.x, z: BOWLS.z, house: TEA });
   // The lawn: after every fixed feature, whose colliders and platforms it grows around.
   // It has its own seeded generator, so it doesn't use (or shift) ctx.rand.
-  const grass = new Grass(ctx, { stones: steppingStones.footprints(), density: grassDensity });
+  const grass = new Grass(ctx, { stones: [...steppingStones.footprints(), ...bowls.footprints()], density: grassDensity });
 
   // Animals: after every collider is in place.
   const hearts = new Hearts(ctx);
-  const dog = new Dog(ctx, { hearts, zenGarden });
+  const dog = new Dog(ctx, { hearts, zenGarden, bowls });
   const birds = new Birds(ctx, { perchSources: [lanterns, trees, torii, teaHouse, fence], dog });
-  const cats = new Cats(ctx, { dog, birds, hearts, zenGarden });
+  const cats = new Cats(ctx, { dog, birds, hearts, zenGarden, bowls });
   // The birds watch out for the cats, but the cats need the birds (to stalk them), so
   // the birds are made first and told about the cats afterwards.
   birds.cats = cats;
+  // The bowls work out who's eating at them by asking the animals.
+  bowls.eaters = [dog, ...cats.list];
   // The Gardener looks after all of it, so he's handed most of the garden. He draws
   // only from Math.random, so building him after everything that uses ctx.rand leaves
   // the layout alone.
   const gardener = new Gardener(ctx, {
-    teaHouse, teaThings, zenGarden, pond, feeding, trees, flowers, fuji, dog, cats, fenceR: FENCE_R,
+    teaHouse, teaThings, bowls, zenGarden, pond, feeding, trees, flowers, fuji, dog, cats, fenceR: FENCE_R,
   });
   // Butterflies land on the low things (flowers, stones, rocks) and take off when the
   // dog, a cat or the Gardener comes by.
@@ -105,7 +110,12 @@ export function buildGarden(ctx, { anisotropy = 1, grassDensity = 1 } = {}) {
 
   return {
     sky, ground, fuji, clouds, trees, lanterns, pond, ripples, bridge, torii, steppingStones,
+<<<<<<< HEAD
+    teaHouse, zenGarden, shishi, fence, rocks, flowers, teaThings, bowls, grass,
+    feeding, koi, hearts, dog, birds, cats, gardener, interaction,
+=======
     teaHouse, zenGarden, shishi, fence, rocks, flowers, teaThings, grass,
     feeding, koi, hearts, dog, birds, cats, gardener, butterflies, interaction,
+>>>>>>> origin/main
   };
 }

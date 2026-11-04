@@ -12,7 +12,8 @@ import { Animal } from '../animals/animal.js';
 // ---- The Gardener ----
 // An old man who looks after the garden. He takes tea in the tea house (and spends the
 // night there), strolls over to admire the trees and flowers, feeds the koi, rakes the
-// gravel garden, pets the dog and the cats, and bows when you greet him.
+// gravel garden, pets the dog and the cats, fills their bowls by the tea house, and
+// bows when you greet him.
 //
 // Three techniques carry him:
 //
@@ -85,6 +86,8 @@ const THROW = { rShX: -1.4, rEl: -0.2, rShZ: 0.2 };
 const TOUCH = { rShX: -0.7, rEl: -0.2, rShZ: -0.1 };
 const LOOK_UP = { headX: -0.55, lean: -0.05 };
 const CARRY = { rShX: -0.25, rEl: -0.5, rShZ: 0.15 }; // right hand on the upright rake
+const POUR_POUCH = { lShX: -1.05, lEl: -0.35, lElZ: -0.2 };  // kibble out of the bag, into a bowl
+const POUR_BUCKET = { rShX: -0.55, rEl: -0.45, rShZ: 0.05 }; // the bucket held out over the bowl
 
 const tmp = new THREE.Vector3();
 const tmpQ = new THREE.Quaternion();
@@ -95,10 +98,10 @@ export class Gardener extends Animal {
   static GREET_R = 2.8;   // how close the player must be to greet him
 
   constructor(ctx, {
-    teaHouse, teaThings, zenGarden, pond, feeding, trees, flowers, fuji, dog, cats, fenceR, x = -20, z = 4,
+    teaHouse, teaThings, bowls, zenGarden, pond, feeding, trees, flowers, fuji, dog, cats, fenceR, x = -20, z = 4,
   }) {
     super(ctx, { x, z, radius: Gardener.R, height: 2 });
-    Object.assign(this, { teaHouse, teaThings, zenGarden, pond, feeding, trees, flowers, fuji, dog, cats, fenceR });
+    Object.assign(this, { teaHouse, teaThings, bowls, zenGarden, pond, feeding, trees, flowers, fuji, dog, cats, fenceR });
     this.y = 0;             // height of the ground under him, eased
     this.build();
     this.buildRake();
@@ -117,6 +120,7 @@ export class Gardener extends Animal {
     this.lookAt = null;     // something to keep his eyes on ({ x, z })
     this.greetT = 0;
     this.held = null;       // a tea cup in his hand: { cup, w, want, tilt, tiltNow }
+    this.bucketHeld = null; // the water bucket, likewise: { w, want, tilt, tiltNow }
     this.rakeHeld = false;
     this.rakeMode = 'carry';
     this.activity = null;
@@ -368,6 +372,8 @@ export class Gardener extends Animal {
       feed: this.feeding.pellets.length ? 0 : 2,
       rake: this.zenGarden.prints >= 8 ? 4 : 1,      // a good few footprints in the gravel? Off to rake them
       pet: this.petCandidate() ? 2.5 : 0,
+      // A bowl running low? It soon becomes the thing to do.
+      fill: this.bowls.lowest() < 0.25 ? 5 : this.bowls.lowest() < 0.6 ? 0.8 : 0,
     };
     delete weights[this.lastActivity];               // something different each time
     const total = Object.values(weights).reduce((a, b) => a + b, 0);
@@ -397,6 +403,7 @@ export class Gardener extends Animal {
       this.pouch.visible = false;
       if (this.held) this.held.want = 0;
       if (this.rakeHeld) this.putRakeDown(true);
+      if (this.bucketHeld) this.putBucketDown(true);
       this.activity = null;
     }
   }
@@ -615,7 +622,7 @@ export class Gardener extends Animal {
   petCandidate() {
     const near = (a) => Math.hypot(a.x - this.x, a.z - this.z);
     const options = this.cats.list.filter((c) => c.settled);
-    if (!(this.dog.state === 'follow' && !this.dog.leader)) options.push(this.dog);
+    if (!(this.dog.state === 'follow' && !this.dog.leader) && this.dog.state !== 'bowl') options.push(this.dog); // not while it eats
     return options.filter((a) => near(a) < 30).sort((a, b) => near(a) - near(b))[0] ?? null;
   }
 
@@ -652,6 +659,98 @@ export class Gardener extends Animal {
     this.overlay = null;
     this.poseName = 'stand';
     yield* this.wait(1.5);
+  }
+
+  // -- Fill the pets' bowls: kibble from the bin into the dog's and the cats' bowls,
+  // then water from the bucket. Then he stands back a while, to see who comes.
+  *fill() {
+    const bowls = this.bowls;
+    const food = bowls.list.filter((b) => b !== bowls.water && b.level < 0.7);
+    if (food.length) {
+      if (!(yield* this.walkTo(bowls.binStand, { tol: 0.35 }))) return;
+      yield* this.faceRow();
+      this.poseName = 'crouch';            // lift the lid and fill the bag
+      yield* this.wait(0.8);
+      this.overlay = TOUCH;
+      yield* this.wait(1.2);
+      this.pouch.visible = true;
+      this.overlay = HOLD_POUCH;
+      this.poseName = 'stand';
+      yield* this.wait(0.6);
+      for (const bowl of food) yield* this.fillBowl(bowl, POUR_POUCH, HOLD_POUCH);
+      this.pouch.visible = false;
+      this.overlay = null;
+    }
+    if (bowls.water.level < 0.7) {
+      if (!(yield* this.walkTo(bowls.bucketStand, { tol: 0.35 }))) return;
+      yield* this.faceRow();
+      this.poseName = 'crouch';
+      yield* this.wait(0.8);
+      this.bucketHeld = { w: 0, want: 1, tilt: 0, tiltNow: 0 };
+      yield* this.wait(0.6);
+      this.poseName = 'stand';
+      yield* this.wait(0.6);
+      yield* this.fillBowl(bowls.water, POUR_BUCKET, null);
+      if (yield* this.walkTo(bowls.bucketStand, { tol: 0.35 })) {
+        yield* this.faceRow();
+        this.poseName = 'crouch';
+        yield* this.wait(0.8);
+      }
+      this.putBucketDown(false);
+      yield* this.wait(0.6);
+      this.poseName = 'stand';
+    }
+    // Step back and watch, hands behind his back.
+    const p = bowls.group.position, spot = { x: p.x + 1, z: p.z + 3.2 };
+    if (yield* this.walkTo(spot, { tol: 0.6, timeout: 15 })) {
+      yield* this.face(Math.atan2(p.x - this.x, p.z - this.z));
+      this.lookAt = p;
+      this.poseName = 'behind';
+      this.overlay = { headX: 0.2 };
+      yield* this.wait(5 + Math.random() * 4);
+    }
+  }
+
+  // The bowls stand in a row along the tea house wall, which lies to the north (-Z).
+  *faceRow() {
+    yield* this.face(Math.PI);
+  }
+
+  // Walk up to a bowl (on whichever side is free), crouch, and pour: the `pour` gesture,
+  // then back to `after`. The bowl fills over a second or two (Bowls.update).
+  *fillBowl(bowl, pour, after) {
+    const spot = [0, 0.9, -0.9].map((a) => ({ x: bowl.x + Math.sin(a), z: bowl.z + Math.cos(a) }))
+      .find((q) => !this.blocked(q.x, q.z));
+    if (!spot || !(yield* this.walkTo(spot, { tol: 0.3, timeout: 30 }))) return;
+    yield* this.face(Math.atan2(bowl.x - this.x, bowl.z - this.z));
+    this.lookAt = bowl;
+    this.poseName = 'crouch';
+    yield* this.wait(0.8);
+    this.overlay = after ? { ...after, ...pour } : pour;
+    yield* this.wait(0.5);
+    if (this.bucketHeld) this.bucketHeld.tilt = 1.1;
+    this.bowls.fill(bowl);
+    if (this.bucketHeld) SFX.pour(distVol(this.x, this.z, 20)); else SFX.kibble(distVol(this.x, this.z, 20));
+    yield* this.wait(1.8);
+    if (this.bucketHeld) this.bucketHeld.tilt = 0;
+    this.overlay = after;
+    yield* this.wait(0.5);
+    this.poseName = 'stand';
+    this.lookAt = null;
+    yield* this.wait(0.5);
+  }
+
+  // Let go of the bucket: animateBucket() eases it back onto its stone (or `snap` puts
+  // it straight there, if he's interrupted somewhere else).
+  putBucketDown(snap) {
+    if (!this.bucketHeld) return;
+    this.bucketHeld.want = 0;
+    this.bucketHeld.tilt = 0;
+    if (snap) {
+      this.bowls.bucket.position.copy(this.bowls.bucketRest);
+      this.bowls.bucket.rotation.set(0, 0, 0);
+      this.bucketHeld = null;
+    }
   }
 
   // -- Rake the gravel: fetch the rake, make a few slow passes along the raked lines,
@@ -804,7 +903,7 @@ export class Gardener extends Animal {
     const [L, R] = this.arms;
     L.shoulder.rotation.set(J.lShX - armSwing - stroke * 1.2, 0, J.lShZ);
     L.elbow.rotation.set(J.lEl, 0, J.lElZ);
-    R.shoulder.rotation.set(J.rShX + (this.rakeHeld ? 0 : armSwing) - stroke * 1.2, 0, -J.rShZ);
+    R.shoulder.rotation.set(J.rShX + (this.rakeHeld || this.bucketHeld ? 0 : armSwing) - stroke * 1.2, 0, -J.rShZ);
     R.elbow.rotation.set(J.rEl, 0, -J.rElZ);
 
     // Hip height from the legs: how far down each foot reaches (thigh and shin
@@ -830,6 +929,7 @@ export class Gardener extends Animal {
 
     this.animateRake(ease, stroke);
     this.animateCup(dt);
+    this.animateBucket(dt);
   }
 
   // In his hands the rake eases to where the activity wants it: upright at his side,
@@ -869,6 +969,27 @@ export class Gardener extends Animal {
       g.position.copy(h.cup.home);
       g.rotation.set(0, 0, 0);
       this.held = null;
+    }
+  }
+
+  // The bucket works the same way, between its stone (w = 0) and his right hand
+  // (w = 1), in the bowls' frame. It hangs from its handle, and pouring tips its rim
+  // away from him, toward the bowl.
+  animateBucket(dt) {
+    const h = this.bucketHeld;
+    if (!h) return;
+    const k = Math.min(1, dt * 4), b = this.bowls.bucket;
+    h.w += (h.want - h.w) * k;
+    h.tiltNow += (h.tilt - h.tiltNow) * k;
+    this.hands.r.getWorldPosition(tmp);
+    this.bowls.group.worldToLocal(tmp);
+    b.position.lerpVectors(this.bowls.bucketRest, tmp, h.w);
+    const tilt = h.tiltNow * h.w;
+    b.rotation.set(tilt * Math.cos(this.heading), 0, -tilt * Math.sin(this.heading));
+    if (h.want === 0 && h.w < 0.01) {
+      b.position.copy(this.bowls.bucketRest);
+      b.rotation.set(0, 0, 0);
+      this.bucketHeld = null;
     }
   }
 }

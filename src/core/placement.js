@@ -1,5 +1,5 @@
 import {
-  FENCE_R, POND_Z, POND_R, LANTERN_SPOTS, PATH_LANTERN_SPOTS, TORII_Z, TEA, TEA_PATH, ZEN, SHISHI,
+  FENCE_R, POND_Z, POND_R, LANTERN_SPOTS, PATH_LANTERN_SPOTS, TORII_Z, TEA, TEA_PATH, BOWLS, ZEN, SHISHI,
 } from './layout.js';
 
 // ---- Placement: keep randomly placed props from overlapping each other ----
@@ -55,6 +55,7 @@ export class Placement {
     for (let z = POND_Z + POND_R; z <= 46; z += 2) this.reserve(0, z, 2);  // stepping-stone path + spawn
     this.reserve(TEA.x, TEA.z, 6.5);
     for (const [x, z] of TEA_PATH) this.reserve(x, z, 1.2);
+    for (let dx = -4.2; dx <= 3.7; dx += 1.3) this.reserve(BOWLS.x + dx, BOWLS.z, 0.9); // bowls, bin and bucket
     this.reserve(ZEN.x, ZEN.z, 10.5);
     this.reserve(SHISHI.x, SHISHI.z, 2.5);
   }

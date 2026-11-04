@@ -11,8 +11,12 @@ import { Animal } from './animal.js';
 // Three cats with their own routines: they wander, sit, groom, curl up for a nap, stalk
 // birds on the grass (and pounce, always a moment too late), and bolt when the dog comes
 // near. You can pet them, if they're in the mood. Their eyes shine in the dark, and
-// they leave paw prints on the raked gravel.
+// they leave paw prints on the raked gravel. When they're hungry or thirsty they go to
+// the bowls by the tea house, as long as the dog isn't there.
 const CAT_SPEED = { wander: 1.1, stalk: 0.7, flee: 4.5, pounce: 5 };
+const CAT_HUNGER = 1 / 200, CAT_THIRST = 1 / 130; // per second; at 1 it heads for a bowl
+const CAT_REACH = 0.48;                            // body centre to mouth, crouched over a bowl
+const CAT_DOG_CLEAR = 6;                           // won't go to a bowl with the dog this close to it
 const CAT_FEELERS = [0, 0.45, -0.45, 0.9, -0.9, 1.4, -1.4, 2, -2];
 // marks: flattened blobs on the back [colour, x, y, z, sizeX, sizeZ]; headMarks likewise on the head.
 const CAT_COATS = [
@@ -32,14 +36,19 @@ const CAT_COATS = [
 ];
 
 // One cat: a state machine ('wander', 'sit', 'groom', 'loaf', 'stalk', 'pounce',
-// 'flee'), like the dog. `dog` and `birds` are what it reacts to.
+// 'flee', 'bowl'), like the dog. `dog` and `birds` are what it reacts to.
 class Cat extends Animal {
   static R = 0.3;       // collision radius
   static PET_R = 2.4;   // petting reach
 
-  constructor(ctx, { coat, parent, dog, birds, hearts, zenGarden }) {
+  constructor(ctx, { coat, parent, dog, birds, hearts, zenGarden, bowls }) {
     super(ctx, { radius: Cat.R, height: 0.8, parent }); // the player (and the dog) can't walk through a cat
-    Object.assign(this, { dog, birds, hearts, zenGarden });
+    Object.assign(this, { dog, birds, hearts, zenGarden, bowls });
+    this.bowlKind = 'cat';
+    this.hunger = Math.random() * 0.9;
+    this.thirst = Math.random() * 0.9;
+    this.meal = null;   // the bowl and seat it's going to (see Animal.findMeal)
+    this.lapT = 0;      // until the next lap (or nibble)
     this.name = coat.name;
     this.build(coat);
     this.heading = Math.random() * Math.PI * 2;
@@ -51,7 +60,7 @@ class Cat extends Animal {
     this.prey = null;
     this.pounceT = 0;
     this.stalkCheck = 2 + Math.random() * 3;
-    this.pose = { sit: 0, lie: 0, crouch: 0, groom: 0 };
+    this.pose = { sit: 0, lie: 0, crouch: 0, groom: 0, eat: 0 };
     this.phase = 0;
     this.blink = 3;
     this.lookYaw = 0;
@@ -139,9 +148,11 @@ class Cat extends Animal {
 
   // Head toward a goal, swerving around obstacles (same idea as the dog's steering).
   // Turns mostly on the spot first, so it doesn't run the wrong way (e.g. into the dog).
-  steer(goal, wantSpeed, dt, turnRate = 4) {
+  // `ignore`: a collider it means to walk right up to (a bowl).
+  steer(goal, wantSpeed, dt, turnRate = 4, ignore = null) {
     if (goal) {
-      const free = this.freeHeading(Math.atan2(goal.x - this.x, goal.z - this.z), CAT_FEELERS, 0.6);
+      const reach = ignore ? clamp(Math.hypot(goal.x - this.x, goal.z - this.z), 0.2, 0.6) : 0.6;
+      const free = this.freeHeading(Math.atan2(goal.x - this.x, goal.z - this.z), CAT_FEELERS, reach, ignore);
       if (!free) wantSpeed = 0;
       else {
         let diff = free.angle - this.heading;
@@ -155,7 +166,7 @@ class Cat extends Animal {
     this.speed += clamp(wantSpeed - this.speed, -8 * dt, 5 * dt);
     if (this.speed > 0.01) {
       const nx = this.x + Math.sin(this.heading) * this.speed * dt, nz = this.z + Math.cos(this.heading) * this.speed * dt;
-      if (this.blocked(nx, nz)) { this.speed = 0; this.stuck += dt; }
+      if (this.blocked(nx, nz, ignore)) { this.speed = 0; this.stuck += dt; }
       else { this.x = nx; this.z = nz; this.stuck = 0; }
     }
   }
@@ -196,11 +207,19 @@ class Cat extends Animal {
       const away = Math.atan2(this.x - dog.x, this.z - dog.z);
       this.target = { x: this.x + Math.sin(away) * 8, z: this.z + Math.cos(away) * 8 };
     }
-    let goal = null, speed = 0;
-    const want = { sit: 0, lie: 0, crouch: 0, groom: 0 };
+    let goal = null, speed = 0, ignore = null;
+    const want = { sit: 0, lie: 0, crouch: 0, groom: 0, eat: 0 };
     this.timer -= dt;
+    this.hunger += dt * CAT_HUNGER;
+    this.thirst += dt * CAT_THIRST;
     switch (this.state) {
       case 'wander': {
+        // Hungry or thirsty? To the bowls, unless the dog is hanging about there.
+        const meal = this.findMeal(CAT_REACH, dt);
+        if (meal && Math.hypot(dog.x - meal.bowl.x, dog.z - meal.bowl.z) > CAT_DOG_CLEAR) {
+          this.state = 'bowl'; this.meal = meal; this.target = null; this.stuck = 0;
+          break;
+        }
         if (!this.target) this.target = this.openSpot();
         goal = this.target; speed = CAT_SPEED.wander;
         if (Math.hypot(this.target.x - this.x, this.target.z - this.z) < 0.5 || this.stuck > 1.5) {
@@ -243,6 +262,31 @@ class Cat extends Animal {
         if (this.pounceT >= 0.45) { this.state = 'sit'; this.timer = 4; }   // sits, pretending it meant to miss
         break;
       }
+      case 'bowl': {
+        const m = this.meal, g = m.eating ? null : this.mealGoal(dt, 0.2);
+        if (m.eating) {
+          // Crouch over the bowl, facing it, and lap (or nibble) away.
+          let diff = m.heading - this.heading;
+          this.heading += clamp(Math.atan2(Math.sin(diff), Math.cos(diff)), -3 * dt, 3 * dt);
+          want.crouch = 1; want.eat = 1;
+          if (this.pose.eat > 0.7) {
+            if ((this.lapT -= dt) <= 0) {
+              this.lapT = m.drink ? 0.35 : 0.6;
+              SFX[m.drink ? 'lap' : 'munch'](distVol(this.x, this.z, 12) * 0.6);
+            }
+            if (this.eatFrom(m, dt, m.drink ? 0.12 : 0.2, m.drink ? 4 : 6)) {
+              this.state = 'groom'; // a wash after every meal
+              this.timer = 3 + Math.random() * 4;
+            }
+          }
+        } else if (m.failed) {
+          this.state = 'wander'; // can't get there, or someone else finished it
+        } else {
+          goal = g; ignore = m.bowl.solid;
+          speed = m.path.length ? CAT_SPEED.wander : Math.min(CAT_SPEED.wander, Math.hypot(g.x - this.x, g.z - this.z) * 2 + 0.2);
+        }
+        break;
+      }
       case 'flee':
         goal = this.target; speed = CAT_SPEED.flee;
         if (this.stuck > 0.3) { // cornered: try another way out
@@ -252,7 +296,7 @@ class Cat extends Animal {
         if (this.timer <= 0) { this.state = 'sit'; this.timer = 3; this.target = null; }
         break;
     }
-    if (this.state !== 'pounce') this.steer(goal, speed, dt, this.state === 'flee' ? 10 : 4);
+    if (this.state !== 'pounce') this.steer(goal, speed, dt, this.state === 'flee' ? 10 : 4, ignore);
     this.syncSolid();
     this.animate(dt, t, want);
   }
@@ -262,7 +306,7 @@ class Cat extends Animal {
   animate(dt, t, want) {
     const ease = Math.min(1, dt * 5);
     for (const k in this.pose) this.pose[k] += (want[k] - this.pose[k]) * ease;
-    const { sit, lie, crouch, groom } = this.pose;
+    const { sit, lie, crouch, groom, eat } = this.pose;
     const legs = this.legs;
     const moving = Math.min(1, this.speed / 1.2);
     const before = this.phase;
@@ -284,7 +328,10 @@ class Cat extends Animal {
     if (Math.random() < dt * 0.5) this.lookYaw = (Math.random() - 0.5) * 1.2;
     const look = this.state === 'stalk' || this.state === 'pounce' ? 0 : this.lookYaw * (1 - groom) * (1 - lie);
     this.head.rotation.y += (look + 0.45 * groom - this.head.rotation.y) * ease;
-    this.head.rotation.x = 0.45 * sit * (1 - groom) + (0.5 + Math.sin(t * 9) * 0.12) * groom + 0.35 * lie;
+    // Eating: the head dips forward into the bowl and bobs as it laps.
+    const lap = this.state === 'bowl' ? Math.sin(t * (this.meal.drink ? 16 : 10)) * 0.08 : 0;
+    this.head.position.set(0, 0.13 - 0.12 * eat, 0.5 + 0.05 * eat);
+    this.head.rotation.x = 0.45 * sit * (1 - groom) + (0.5 + Math.sin(t * 9) * 0.12) * groom + 0.35 * lie + (0.75 + lap) * eat;
     // Tail: up like a question mark when walking, curled round when resting, low and
     // twitching while stalking.
     const resting = Math.max(sit, lie);
@@ -310,14 +357,14 @@ class Cat extends Animal {
   }
 }
 
-// All the cats. They run from the `dog`, stalk the `birds`, show `hearts` when petted
-// and leave paw prints in the `zenGarden`.
+// All the cats. They run from the `dog`, stalk the `birds`, show `hearts` when petted,
+// leave paw prints in the `zenGarden` and eat and drink from the `bowls`.
 export class Cats extends Feature {
   static PET_R = Cat.PET_R;
 
-  constructor(ctx, { dog, birds, hearts, zenGarden }) {
+  constructor(ctx, { dog, birds, hearts, zenGarden, bowls }) {
     super(ctx);
-    this.list = CAT_COATS.map((coat) => new Cat(ctx, { coat, parent: this.group, dog, birds, hearts, zenGarden }));
+    this.list = CAT_COATS.map((coat) => new Cat(ctx, { coat, parent: this.group, dog, birds, hearts, zenGarden, bowls }));
   }
 
   update(dt, t) {
