@@ -2,6 +2,8 @@
 
 A low-poly Japanese garden you can explore in the browser, on foot or flying. It runs on desktop and on phones and tablets. It's built with [Three.js](https://threejs.org/) and bundled with [Vite](https://vite.dev/).
 
+Online version of the garden is [here](https://ebutusov.github.io/lp_garden/)
+
 The source is commented as a guided tour of 3D programming. It covers the scene graph and pivots, cameras, lights and shadow maps, materials and flat shading, custom shaders, particles, instancing, post-processing bloom, collision, steering and procedural animation.
 
 ## What's in the garden
