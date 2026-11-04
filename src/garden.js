@@ -110,12 +110,7 @@ export function buildGarden(ctx, { anisotropy = 1, grassDensity = 1 } = {}) {
 
   return {
     sky, ground, fuji, clouds, trees, lanterns, pond, ripples, bridge, torii, steppingStones,
-<<<<<<< HEAD
     teaHouse, zenGarden, shishi, fence, rocks, flowers, teaThings, bowls, grass,
-    feeding, koi, hearts, dog, birds, cats, gardener, interaction,
-=======
-    teaHouse, zenGarden, shishi, fence, rocks, flowers, teaThings, grass,
     feeding, koi, hearts, dog, birds, cats, gardener, butterflies, interaction,
->>>>>>> origin/main
   };
 }

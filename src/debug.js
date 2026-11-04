@@ -13,11 +13,7 @@ import { setHelpVisible } from './ui/help.js';
 //   garden.setView({ x: 0, y: 12, z: 10, yaw: 0, pitch: -0.8, fly: true })
 // main.js installs them once the garden is built, handing over what they inspect.
 export function installDebug(garden, { physics }) {
-<<<<<<< HEAD
-  const { trees, lanterns, pond, flowers, steppingStones, koi, feeding, dog, birds, cats, gardener, zenGarden, interaction, grass, bowls } = garden;
-=======
-  const { trees, lanterns, pond, flowers, steppingStones, koi, feeding, dog, birds, cats, gardener, butterflies, zenGarden, interaction, grass } = garden;
->>>>>>> origin/main
+  const { trees, lanterns, pond, flowers, steppingStones, koi, feeding, dog, birds, cats, gardener, butterflies, zenGarden, interaction, grass, bowls } = garden;
   const { solids, mounds } = physics;
   // Where an animal is with its meal: which bowl, whether it's got there, how far off it is.
   const meal = (a) => (a.state === 'bowl' ? {
