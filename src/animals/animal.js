@@ -40,7 +40,18 @@ export class Animal extends Feature {
   // Places this animal won't go (see groundBlocked in physics.js). Its own collision
   // circle doesn't count, or it would always be in its own way. Nor does `ignore`, a
   // collider it means to go right up to.
+  // At a bowl it stands partly inside the bowl's collider (it had to, to reach it), so
+  // once it stops eating (it's had enough, or the dog turned up) every step from there
+  // would count as blocked and it would be stuck. So the bowl doesn't count while the
+  // animal still overlaps it, as long as the step doesn't take it any further in.
   blocked(x, z, ignore = null) {
+    if (!ignore) {
+      const s = this.meal?.bowl.solid;
+      if (s) {
+        const now = Math.hypot(this.x - s.x, this.z - s.z);
+        if (now < s.r + this.radius && Math.hypot(x - s.x, z - s.z) >= now) ignore = s;
+      }
+    }
     return this.ctx.physics.groundBlocked(x, z, this.radius, this.solid, ignore);
   }
 
