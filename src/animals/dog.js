@@ -10,26 +10,36 @@ import { Animal } from './animal.js';
 // ---- A friendly Shiba Inu ----
 // Wanders between random spots, stops to sit or sniff, greets and follows the player,
 // and can be petted. It keeps off the pond, bridge and tea house; on the raked
-// gravel it leaves paw prints.
+// gravel it leaves paw prints. When it's hungry or thirsty it goes to its bowl by the
+// tea house (world/bowls.js).
 // The Gardener can pet it too, and then it trots after him for a while.
 const DOG_SPEED = { walk: 2.2, trot: 4.5 };
+const DOG_HUNGER = 1 / 150, DOG_THIRST = 1 / 100; // per second; at 1 it heads for a bowl
+const DOG_REACH = 0.7;                     // body centre to muzzle, with its head down
 const DOG_GREET_R = 8;                     // notices the player within this distance
 const DOG_GIVE_UP_R = 16;                  // stops following beyond this
 const DOG_SIT_DIST = 2;                    // how close it sits by the player
 
 // The dog is a small state machine: 'wander' to a waypoint, 'rest' (sit or sniff),
-// or 'follow' someone: the player, or a `leader` (anyone with x and z, e.g. the Gardener). Its logical state (x, z, heading, speed) is kept apart from
+// 'bowl' (go to a bowl and eat or drink), or 'follow' someone: the player, or a `leader` (anyone with x and z, e.g. the Gardener). Its logical state (x, z, heading, speed) is kept apart from
 // the meshes; the pose code at the end of update() turns that state into rotations.
 export class Dog extends Animal {
   static R = 0.45;    // collision radius
   static PET_R = 3;   // petting reach
 
   // It starts at (x, z), or somewhere else if that's blocked. `hearts` shows its joy;
-  // `zenGarden` is the gravel it leaves paw prints in.
-  constructor(ctx, { hearts, zenGarden, x = 7, z = 38 }) {
+  // `zenGarden` is the gravel it leaves paw prints in; `bowls`, where it eats and drinks.
+  constructor(ctx, { hearts, zenGarden, bowls, x = 7, z = 38 }) {
     super(ctx, { x, z, radius: Dog.R, height: 1.2 }); // so the player can't walk through it
     this.hearts = hearts;
     this.zenGarden = zenGarden;
+    this.bowls = bowls;
+    this.bowlKind = 'dog';
+    this.hunger = 0.3 + Math.random() * 0.5;
+    this.thirst = Math.random() * 0.6;
+    this.meal = null;    // the bowl and seat it's going to (see Animal.findMeal)
+    this.eat = 0;        // 0 head up … 1 head down in the bowl
+    this.chewT = 0;      // until the next crunch (or lap)
     this.build();
     this.heading = Math.PI;
     this.speed = 0;
@@ -141,6 +151,8 @@ export class Dog extends Animal {
     const withPlayer = this.state === 'follow' && !this.leader;
     this.cooldown -= dt;
     this.happy = Math.max(0, this.happy - dt);
+    this.hunger += dt * DOG_HUNGER;
+    this.thirst += dt * DOG_THIRST;
 
     // The player always wins: it leaves whatever it's doing (or whoever it's following).
     if (!withPlayer && playerAround && toPlayer < DOG_GREET_R && this.cooldown <= 0) {
@@ -159,10 +171,16 @@ export class Dog extends Animal {
       this.leader = null;
     }
 
+    // Hungry or thirsty, and nobody to be with? Off to the bowls.
+    if (this.state === 'wander' || (this.state === 'rest' && !this.watch)) {
+      const meal = this.findMeal(DOG_REACH, dt);
+      if (meal) { this.state = 'bowl'; this.meal = meal; this.stuck = 0; this.watch = null; }
+    }
+
     // Whom it's following, if anyone: the leader, or else the player.
     const lead = this.state === 'follow' ? (this.leader ?? p) : null;
     const toLead = lead ? Math.hypot(lead.x - this.x, lead.z - this.z) : Infinity;
-    let goal = null, wantSpeed = 0, sitting = false;
+    let goal = null, wantSpeed = 0, sitting = false, ignore = null;
     if (this.state === 'follow') {
       // If they're somewhere the dog won't go (wading, in the tea house),
       // it sits at the edge and waits once it's reasonably close. (A leader's own
@@ -187,6 +205,32 @@ export class Dog extends Animal {
         goal = this.target;
         wantSpeed = DOG_SPEED.walk;
       }
+    } else if (this.state === 'bowl') {
+      const m = this.meal, g = m.eating ? null : this.mealGoal(dt, 0.3);
+      if (m.eating) {
+        // Face the bowl and tuck in: a few seconds for water, longer for food.
+        let diff = m.heading - this.heading;
+        this.heading += clamp(Math.atan2(Math.sin(diff), Math.cos(diff)), -4 * dt, 4 * dt);
+        this.chewT -= dt;
+        if (this.chewT <= 0 && this.eat > 0.7) {
+          this.chewT = m.drink ? 0.3 : 0.45;
+          SFX[m.drink ? 'lap' : 'munch'](distVol(this.x, this.z, 18));
+        }
+        if (this.eat > 0.7 && this.eatFrom(m, dt, m.drink ? 0.3 : 0.45, m.drink ? 4 : 7)) {
+          this.state = 'rest';
+          this.timer = 3 + Math.random() * 3;
+          this.restSit = Math.random() < 0.6;
+          this.happy = 1.5;
+        }
+      } else if (m.failed) {
+        this.state = 'wander'; // can't get there, or someone else finished it
+        this.target = null;
+      } else {
+        const d = Math.hypot(g.x - this.x, g.z - this.z);
+        goal = g;
+        ignore = m.bowl.solid; // it means to walk right up to the bowl
+        wantSpeed = d > 6 ? DOG_SPEED.trot : m.path.length ? DOG_SPEED.walk : Math.min(DOG_SPEED.walk, d * 2 + 0.3);
+      }
     } else { // rest: sit, or stand and sniff the ground
       sitting = this.restSit;
       this.timer -= dt;
@@ -198,7 +242,8 @@ export class Dog extends Animal {
       // the same side as last time so it doesn't dither left and right.
       const desired = Math.atan2(goal.x - this.x, goal.z - this.z);
       const s = this.avoidSide;
-      const free = this.freeHeading(desired, [0, s * 0.45, -s * 0.45, s * 0.9, -s * 0.9, s * 1.4, -s * 1.4, s * 2, -s * 2], 0.9);
+      const reach = ignore ? clamp(Math.hypot(goal.x - this.x, goal.z - this.z), 0.3, 0.9) : 0.9;
+      const free = this.freeHeading(desired, [0, s * 0.45, -s * 0.45, s * 0.9, -s * 0.9, s * 1.4, -s * 1.4, s * 2, -s * 2], reach, ignore);
       if (!free) {
         wantSpeed = 0; // nowhere to go (e.g. the player is in the pond): wait
         if (this.state === 'follow') sitting = true;
@@ -213,7 +258,7 @@ export class Dog extends Animal {
     if (this.speed > 0.01) {
       const nx = this.x + Math.sin(this.heading) * this.speed * dt;
       const nz = this.z + Math.cos(this.heading) * this.speed * dt;
-      if (this.blocked(nx, nz)) { this.speed = 0; this.stuck += dt; }
+      if (this.blocked(nx, nz, ignore)) { this.speed = 0; this.stuck += dt; }
       else { this.x = nx; this.z = nz; this.stuck = 0; }
     }
     this.syncSolid();
@@ -252,7 +297,12 @@ export class Dog extends Animal {
     this.lookYaw += (look - this.lookYaw) * Math.min(1, dt * 5);
     this.head.rotation.y = this.lookYaw;
     const sniffing = this.state === 'rest' && !this.restSit;
-    this.head.rotation.x = 0.45 * sit + (sniffing ? 0.45 + Math.sin(t * 7) * 0.06 : 0);
+    // Eating: the head (the neck, really) drops forward into the bowl, and chews or laps.
+    const eating = this.state === 'bowl' && this.meal.eating;
+    this.eat += ((eating ? 1 : 0) - this.eat) * Math.min(1, dt * 4);
+    const eat = this.eat, chew = eating ? Math.sin(t * (this.meal.drink ? 18 : 11)) * 0.07 : 0;
+    this.head.position.set(0, 0.2 - 0.32 * eat, 0.72 + 0.1 * eat);
+    this.head.rotation.x = 0.45 * sit + (sniffing ? 0.45 + Math.sin(t * 7) * 0.06 : 0) + (0.9 + chew) * eat;
     this.head.rotation.z = this.state === 'follow' ? Math.sin(t * 1.3) * 0.15 * sit : 0;
     const excited = this.happy > 0 || this.state === 'follow';
     this.tail.rotation.y = Math.sin(t * (excited ? 16 : 6)) * (this.happy > 0 ? 0.6 : excited ? 0.4 : 0.2);

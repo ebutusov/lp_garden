@@ -17,6 +17,7 @@ export const FENCE_GAP = 5;        // ...with a gateway this wide either side of
 export const FENCE_H = 1.8;
 export const TEA = { x: -30, z: 0 };                  // tea house, facing east toward the pond
 export const TEA_PATH = [[-24.4, 0.4], [-22.6, -0.2], [-20.8, 0.5], [-19, 0]]; // its stepping stones
+export const BOWLS = { x: -30, z: 5.3 };            // the pets' bowls, in a row along its south wall
 export const ZEN = { x: 28, z: 2, w: 16, d: 12 };     // raked gravel garden
 export const SHISHI_ANGLE = -1.05;                    // bamboo water spout on the pond rim
 export const SHISHI = {

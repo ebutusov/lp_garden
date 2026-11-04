@@ -13,8 +13,12 @@ import { setHelpVisible } from './ui/help.js';
 //   garden.setView({ x: 0, y: 12, z: 10, yaw: 0, pitch: -0.8, fly: true })
 // main.js installs them once the garden is built, handing over what they inspect.
 export function installDebug(garden, { physics }) {
-  const { trees, lanterns, pond, flowers, steppingStones, koi, feeding, dog, birds, cats, gardener, zenGarden, interaction, grass } = garden;
+  const { trees, lanterns, pond, flowers, steppingStones, koi, feeding, dog, birds, cats, gardener, zenGarden, interaction, grass, bowls } = garden;
   const { solids, mounds } = physics;
+  // Where an animal is with its meal: which bowl, whether it's got there, how far off it is.
+  const meal = (a) => (a.state === 'bowl' ? {
+    bowl: a.meal.bowl.kind, eating: a.meal.eating, legs: a.meal.path.length, d: Math.round(Math.hypot(a.meal.x - a.x, a.meal.z - a.z) * 100) / 100,
+  } : null);
   window.garden = {
     // What actually got placed (trees that found no room are skipped).
     layout: {
@@ -59,20 +63,40 @@ export function installDebug(garden, { physics }) {
       if (pet.kind === 'dog') { pet.animal.pet(); return 'dog'; }
       return pet.animal.pet() ? 'cat' : 'cat:aloof';
     },
-    cats: () => cats.list.map((c) => ({ name: c.name, state: c.state, x: c.x, z: c.z, speed: c.speed })),
+    cats: () => cats.list.map((c) => ({
+      name: c.name, state: c.state, x: c.x, z: c.z, speed: c.speed, hunger: c.hunger, thirst: c.thirst, meal: meal(c),
+    })),
     // The Gardener: what he's doing and where. gardenerDo('rake') makes him start an
-    // activity ('admire', 'view', 'tea', 'feed', 'rake', 'pet'); greet() is the E key.
+    // activity ('admire', 'view', 'tea', 'feed', 'rake', 'pet', 'fill'); greet() is the E key.
     gardener: () => ({
       activity: gardener.activity, pose: gardener.poseName, x: gardener.x, z: gardener.z, heading: gardener.heading,
       speed: gardener.speed, rake: gardener.rakeHeld ? gardener.rakeMode : 'down', cup: !!gardener.held,
+      bucket: !!gardener.bucketHeld,
     }),
     gardenerDo: (name) => gardener.start(name),
     greet: () => gardener.greet(),
     // Footprints in the gravel since it was last raked.
     zenPrints: () => zenGarden.prints,
+    // The bowls: how full each is (0…1) and who's eating or drinking there.
+    bowls: () => bowls.list.map((b) => ({
+      kind: b.kind, level: Math.round(b.level * 100) / 100,
+      eating: bowls.eaters.filter((a) => a.state === 'bowl' && a.meal?.bowl === b).map((a) => a.name ?? 'dog'),
+    })),
+    // Set every bowl's level (e.g. 0, so the Gardener comes to fill them).
+    setBowls: (level) => { for (const b of bowls.list) { b.level = b.target = level; bowls.showLevel(b); } },
+    // Make the dog and the cats hungry (`what` = 'hunger'), thirsty ('thirst') or both.
+    hungry: (what = null) => {
+      for (const a of bowls.eaters) {
+        if (what !== 'thirst') a.hunger = 1;
+        if (what !== 'hunger') a.thirst = 1;
+      }
+    },
     // Put the dog somewhere (for testing how the cats react).
     moveDog: (x, z) => { dog.x = x; dog.z = z; },
-    dog: () => ({ x: dog.x, z: dog.z, state: dog.state, sit: dog.sit, speed: dog.speed, leader: dog.leader === gardener ? 'gardener' : dog.leader }),
+    dog: () => ({
+      x: dog.x, z: dog.z, state: dog.state, sit: dog.sit, speed: dog.speed, leader: dog.leader === gardener ? 'gardener' : dog.leader,
+      hunger: dog.hunger, thirst: dog.thirst, meal: meal(dog),
+    }),
     birds: () => birds.list.map((b) => {
       const { x, y, z } = b.group.position;
       return { species: b.species, state: b.state, on: b.perch.kind, x, y, z };
@@ -86,7 +110,9 @@ export function installDebug(garden, { physics }) {
     // features are built and call rand(); see garden.js).
     fingerprint() {
       const r = (v) => Math.round(v * 1000) / 1000;
-      const animalSolids = new Set([dog.solid, gardener.solid, ...cats.list.map((c) => c.solid)]);
+      // The animals' colliders move, and the bowls' were added after the layout was
+      // fixed; neither is part of what rand() placed.
+      const animalSolids = new Set([dog.solid, gardener.solid, ...cats.list.map((c) => c.solid), ...bowls.solids]);
       const data = {
         mounds: mounds.map((m) => [r(m.x), r(m.z), r(m.r)]),
         solids: solids.filter((s) => !animalSolids.has(s)).map((s) => (s.r !== undefined

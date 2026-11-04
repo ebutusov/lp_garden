@@ -114,6 +114,27 @@ export const SFX = {
     noiseBurst({ freq: 1800, q: 3, gain: 0.05 * vol, dur: 0.35, attack: 0.08 });
     tone({ freq: 300, to: 220, gain: 0.03 * vol, dur: 0.2, delay: 0.3 }); // the swallow
   },
+  munch(vol = 1) { // a crunch of kibble
+    if (!audible() || vol < 0.02) return;
+    noiseBurst({ freq: 2400, q: 1.2, gain: 0.06 * vol, dur: 0.06, attack: 0.003 });
+    noiseBurst({ freq: 1500, q: 1.5, gain: 0.04 * vol, dur: 0.05, attack: 0.003, delay: 0.09 });
+  },
+  lap(vol = 1) { // a lap of water: a short, wet click
+    if (!audible() || vol < 0.02) return;
+    noiseBurst({ freq: 1100, q: 5, gain: 0.05 * vol, dur: 0.07, attack: 0.005 });
+    tone({ freq: 380, to: 520, gain: 0.015 * vol, dur: 0.05 });
+  },
+  kibble(vol = 1) { // dry food poured into a bowl: a rattle of little ticks
+    if (!audible() || vol < 0.02) return;
+    for (let i = 0; i < 14; i++) {
+      noiseBurst({ type: 'highpass', freq: 3000 + Math.random() * 2000, gain: 0.04 * vol, dur: 0.03, attack: 0.002, delay: i * 0.06 + Math.random() * 0.04 });
+    }
+  },
+  pour(vol = 1) { // water poured from the bucket
+    if (!audible() || vol < 0.02) return;
+    noiseBurst({ freq: 900, q: 0.9, gain: 0.07 * vol, dur: 1.4, attack: 0.25 });
+    noiseBurst({ type: 'highpass', freq: 3500, gain: 0.02 * vol, dur: 1.2, attack: 0.3 });
+  },
   yip(vol = 1) { // happy little yip when petted
     if (!audible() || vol < 0.02) return;
     tone({ freq: 700, to: 950, type: 'triangle', gain: 0.1 * vol, dur: 0.09 });
