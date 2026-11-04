@@ -10,11 +10,11 @@ import { SFX } from '../audio/sfx.js';
 const STRIDE = 1.7;  // distance per step
 let stepPhase = 0, bobAmp = 0, wasWading = false;
 let lastStepX = cameraGroup.position.x, lastStepZ = cameraGroup.position.z;
-// What the ground sounds like where (tea house floor, gravel), and the pond's ripples:
-// handed over by main.js.
-let teaHouse, zenGarden, ripples;
+// What the ground sounds like where (tea house floor, gravel, the stream), and the
+// pond's ripples: handed over by main.js.
+let teaHouse, zenGarden, ripples, stream;
 export function initFootsteps(features) {
-  ({ teaHouse, zenGarden, ripples } = features);
+  ({ teaHouse, zenGarden, ripples, stream } = features);
 }
 // `side` is which foot: 1 left, -1 right.
 function footstep(wading, p, feet, side) {
@@ -23,6 +23,7 @@ function footstep(wading, p, feet, side) {
     SFX.step('water');
     return;
   }
+  if (stream.contains(p.x, p.z)) { SFX.step('water'); return; } // splashing through the stream
   const deck = bridgeDeckTop(p.x, p.z);
   const onDeck = deck !== null && Math.abs(feet - deck) < 0.3;
   const gravel = !onDeck && zenGarden.contains(p.x, p.z);

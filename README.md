@@ -2,6 +2,8 @@
 
 A low-poly Japanese garden you can explore in the browser, on foot or flying. It runs on desktop and on phones and tablets. It's built with [Three.js](https://threejs.org/) and bundled with [Vite](https://vite.dev/).
 
+Online version of the garden is [here](https://ebutusov.github.io/lp_garden/)
+
 The source is commented as a guided tour of 3D programming. It covers the scene graph and pivots, cameras, lights and shadow maps, materials and flat shading, custom shaders, particles, instancing, post-processing bloom, collision, steering and procedural animation.
 
 ## What's in the garden
@@ -11,17 +13,20 @@ The source is commented as a guided tour of 3D programming. It covers the scene 
   - A torii gate at the entrance, with a stepping-stone path lined with lanterns.
   - Stone lanterns, plus pine, maple and cherry trees. The trees sway in the wind and the cherry trees shed petals.
   - A raked zen gravel garden and a bamboo shishi-odoshi water spout.
+  - A rockery with a waterfall that pours into a plunge pool, and a stream winding from it down into the pond. You can wade across or hop over on the stepping stones.
   - A bamboo fence, rocks and iris beds.
   - A tea house holding a teapot, cups and a kettle on a brazier, with steam rising from the kettle.
   - Mount Fuji in the distance, with drifting clouds and mist.
+  - A forest ringing the garden beyond the fence, fading into the haze. A gap in the trees frames the view of Fuji, and a path leads out from the gate.
+  - Lower mountain ranges all round the horizon, paler the further away they are.
 - **Animals:**
   - **Koi** gather when you feed them.
   - **A Shiba Inu** roams and naps around the garden, trots over to follow you when you come near, and likes being petted.
-  - **Birds** perch on lanterns, trees, the torii and the fence, and fly off when anyone comes close.
+  - **Birds** perch on lanterns, trees, the torii, the fence and the rockery, and fly off when anyone comes close.
   - **Three cats** wander, groom, nap, stalk birds and keep clear of the dog. Some of them let you pet them.
 - **Atmosphere:**
   - Day and night modes. At night there are stars, a moon, glowing lanterns and fireflies.
-  - Optional sound, all generated in the browser: the water spout, birds, crickets, footsteps and splashes, and the animals.
+  - Optional sound, all generated in the browser: the water spout, the waterfall, birds, crickets, footsteps and splashes, and the animals.
 
 ## Running it
 

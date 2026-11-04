@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { camera, cameraGroup } from '../core/camera.js';
 import { clamp } from '../core/random.js';
 import { player } from '../core/state.js';
-import { WORLD, WATER_LEVEL, FENCE_R, FENCE_GAP, FENCE_H, BRIDGE_RAIL, inPond } from '../core/layout.js';
+import { WORLD, WATER_LEVEL, FENCE_R, FENCE_GAP, FENCE_H, BRIDGE_RAIL, FOREST, inPond } from '../core/layout.js';
 import { bridgeDeckTop, PLAYER_HEIGHT, PLAYER_RADIUS, MAX_STEP } from '../core/physics.js';
 import { keys } from '../input/keys.js';
 import { touch } from '../input/touch.js';
@@ -73,6 +73,16 @@ function collideFence(p, prevX, prevZ, feet) {
   p.z *= target / d;
 }
 
+// On foot, the forest's edge stops you, as the fence does: once a step would take you
+// past it, you're put back on it (and slide along). Only if you were already beyond it
+// (landing there after a flight) can you walk on, so you're never yanked back.
+const FOREST_EDGE = FOREST.inner - 1.5;
+function collideForest(p, prevX, prevZ) {
+  if (player.flyMode || Math.hypot(prevX, prevZ) > FOREST_EDGE) return;
+  const d = Math.hypot(p.x, p.z);
+  if (d > FOREST_EDGE) { p.x *= FOREST_EDGE / d; p.z *= FOREST_EDGE / d; }
+}
+
 // Keep the player within the roaming area.
 function clampToWorld() {
   const b = WORLD - 4;
@@ -134,6 +144,7 @@ export function updateMovement(dt) {
     clampToWorld();
     resolveSolids(p, feet);
     collideFence(p, sx, sz, feet);
+    collideForest(p, sx, sz);
   }
   p.y += wish.y * speed * dt; // only non-zero in flight
 

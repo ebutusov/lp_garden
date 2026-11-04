@@ -1,5 +1,6 @@
 import {
   FENCE_R, POND_Z, POND_R, LANTERN_SPOTS, PATH_LANTERN_SPOTS, TORII_Z, TEA, TEA_PATH, BOWLS, ZEN, SHISHI,
+  FALLS, STREAM_BANK, streamCourse,
 } from './layout.js';
 
 // ---- Placement: keep randomly placed props from overlapping each other ----
@@ -58,5 +59,7 @@ export class Placement {
     for (let dx = -4.2; dx <= 3.7; dx += 1.3) this.reserve(BOWLS.x + dx, BOWLS.z, 0.9); // bowls, bin and bucket
     this.reserve(ZEN.x, ZEN.z, 10.5);
     this.reserve(SHISHI.x, SHISHI.z, 2.5);
+    this.reserve(FALLS.x, FALLS.z, FALLS.r);                               // rockery and waterfall
+    for (const s of streamCourse(0.8)) this.reserve(s.x, s.z, s.w / 2 + STREAM_BANK); // the stream and its banks
   }
 }
