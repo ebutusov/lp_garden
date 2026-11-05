@@ -11,7 +11,8 @@ import { Animal } from './animal.js';
 // Wanders between random spots, stops to sit or sniff, greets and follows the player,
 // and can be petted. It keeps off the pond, bridge and tea house; on the raked
 // gravel it leaves paw prints. When it's hungry or thirsty it goes to its bowl by the
-// tea house (world/bowls.js).
+// tea house (world/bowls.js). When it rains it goes into the tea house and sits by
+// the door, watching the rain, till it stops.
 // The Gardener can pet it too, and then it trots after him for a while.
 const DOG_SPEED = { walk: 2.2, trot: 4.5 };
 const DOG_HUNGER = 1 / 150, DOG_THIRST = 1 / 100; // per second; at 1 it heads for a bowl
@@ -21,19 +22,22 @@ const DOG_GIVE_UP_R = 16;                  // stops following beyond this
 const DOG_SIT_DIST = 2;                    // how close it sits by the player
 
 // The dog is a small state machine: 'wander' to a waypoint, 'rest' (sit or sniff),
-// 'bowl' (go to a bowl and eat or drink), or 'follow' someone: the player, or a `leader` (anyone with x and z, e.g. the Gardener). Its logical state (x, z, heading, speed) is kept apart from
+// 'bowl' (go to a bowl and eat or drink), 'shelter' (from the rain), or 'follow' someone: the player, or a `leader` (anyone with x and z, e.g. the Gardener). Its logical state (x, z, heading, speed) is kept apart from
 // the meshes; the pose code at the end of update() turns that state into rotations.
 export class Dog extends Animal {
   static R = 0.45;    // collision radius
   static PET_R = 3;   // petting reach
 
   // It starts at (x, z), or somewhere else if that's blocked. `hearts` shows its joy;
-  // `zenGarden` is the gravel it leaves paw prints in; `bowls`, where it eats and drinks.
-  constructor(ctx, { hearts, zenGarden, bowls, x = 7, z = 38 }) {
+  // `zenGarden` is the gravel it leaves paw prints in; `bowls`, where it eats and drinks;
+  // `house`, the tea house it shelters in from the rain.
+  constructor(ctx, { hearts, zenGarden, bowls, house, x = 7, z = 38 }) {
     super(ctx, { x, z, radius: Dog.R, height: 1.2 }); // so the player can't walk through it
     this.hearts = hearts;
     this.zenGarden = zenGarden;
     this.bowls = bowls;
+    this.house = house;
+    this.shelter = null; // its trip to the tea house and back (see Animal.startShelter)
     this.bowlKind = 'dog';
     this.hunger = 0.3 + Math.random() * 0.5;
     this.thirst = Math.random() * 0.6;
@@ -116,13 +120,20 @@ export class Dog extends Animal {
     for (let i = 0; i < 40; i++) {
       const a = Math.random() * Math.PI * 2, d = 6 + Math.random() * 36;
       const x = Math.cos(a) * d, z = Math.sin(a) * d;
-      if (!this.blocked(x, z)) return { x, z };
+      // Never somewhere in the tea house: it may only be let in there to shelter.
+      if (!this.blocked(x, z) && !this.ctx.physics.nearTeaHouse(x, z)) return { x, z };
     }
     return { x: this.x, z: this.z };
   }
 
   // Petted by the player, or by `by` (the Gardener), whom it then follows for a while.
   pet(by = null) {
+    if (this.state === 'shelter') { // glad of the company, but it's staying in the dry
+      this.happy = 3;
+      this.hearts.spawn(this.head);
+      SFX.yip(distVol(this.x, this.z, 30));
+      return;
+    }
     this.state = 'follow';
     this.leader = by;
     this.followT = 20 + Math.random() * 20;
@@ -135,7 +146,7 @@ export class Dog extends Animal {
   // Someone (`by`, the Gardener) is coming over to pet it: sit and wait for them. Not
   // while it's with the player, who comes first. False if it won't wait.
   hold(by, seconds) {
-    if (this.state === 'follow' && !this.leader) return false;
+    if ((this.state === 'follow' && !this.leader) || this.state === 'shelter') return false;
     this.timer = Math.max(this.state === 'rest' ? this.timer : 0, seconds);
     this.state = 'rest';
     this.restSit = true;
@@ -155,7 +166,8 @@ export class Dog extends Animal {
     this.thirst += dt * DOG_THIRST;
 
     // The player always wins: it leaves whatever it's doing (or whoever it's following).
-    if (!withPlayer && playerAround && toPlayer < DOG_GREET_R && this.cooldown <= 0) {
+    // Except in the rain: then the dry tea house wins.
+    if (!withPlayer && !this.raining && this.state !== 'shelter' && playerAround && toPlayer < DOG_GREET_R && this.cooldown <= 0) {
       this.state = 'follow';
       this.leader = null;
       this.watch = null;
@@ -171,8 +183,14 @@ export class Dog extends Animal {
       this.leader = null;
     }
 
-    // Hungry or thirsty, and nobody to be with? Off to the bowls.
-    if (this.state === 'wander' || (this.state === 'rest' && !this.watch)) {
+    // Rain: off to the tea house, from anything but a meal (it finishes that first).
+    // When it stops, back out of the door.
+    // (Caught on its way out by another shower, it turns round and goes back in.)
+    if (this.raining && (this.state !== 'shelter' ? this.state !== 'bowl' : this.shelter.phase === 'out')) this.startShelter();
+    else if (!this.raining && this.state === 'shelter' && this.shelter.phase !== 'out') this.leaveShelter();
+
+    // Hungry or thirsty, and nobody to be with? Off to the bowls (not in the rain).
+    if (!this.raining && (this.state === 'wander' || (this.state === 'rest' && !this.watch))) {
       const meal = this.findMeal(DOG_REACH, dt);
       if (meal) { this.state = 'bowl'; this.meal = meal; this.stuck = 0; this.watch = null; }
     }
@@ -230,6 +248,19 @@ export class Dog extends Animal {
         goal = g;
         ignore = m.bowl.solid; // it means to walk right up to the bowl
         wantSpeed = d > 6 ? DOG_SPEED.trot : m.path.length ? DOG_SPEED.walk : Math.min(DOG_SPEED.walk, d * 2 + 0.3);
+      }
+    } else if (this.state === 'shelter') {
+      const g = this.shelterGoal(dt, 0.25);
+      if (g === 'done') this.endShelter();
+      else if (g) {
+        const d = Math.hypot(g.x - this.x, g.z - this.z);
+        goal = g;
+        wantSpeed = d > 6 ? DOG_SPEED.trot : this.shelter.path.length > 1 ? DOG_SPEED.walk : Math.min(DOG_SPEED.walk, d * 2 + 0.3);
+      } else {
+        // At its spot: sit, turned toward the door, and watch the rain.
+        const diff = this.shelter.spot.heading - this.heading;
+        this.heading += clamp(Math.atan2(Math.sin(diff), Math.cos(diff)), -3 * dt, 3 * dt);
+        sitting = true;
       }
     } else { // rest: sit, or stand and sniff the ground
       sitting = this.restSit;

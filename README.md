@@ -25,7 +25,8 @@ The source is commented as a guided tour of 3D programming. It covers the scene 
   - **Birds** perch on lanterns, trees, the torii, the fence and the rockery, and fly off when anyone comes close.
   - **Three cats** wander, groom, nap, stalk birds and keep clear of the dog. Some of them let you pet them.
 - **Atmosphere:**
-  - Day and night modes. At night there are stars, a moon, glowing lanterns and fireflies.
+  - Day and night modes. By day the sun shines high in the south-east; at night a big cratered moon hangs low over the mountains, with stars, glowing lanterns and fireflies. Shadows always fall away from whichever is in the sky.
+  - Rain (R): grey skies and mist, drops rippling the pond, the patter of rain and plink of puddles. The Gardener walks under a red paper umbrella, and the dog and cats shelter in the tea house till it clears.
   - Optional sound, all generated in the browser: the water spout, the waterfall, birds, crickets, footsteps and splashes, and the animals.
 
 ## Running it

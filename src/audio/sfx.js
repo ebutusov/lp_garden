@@ -36,6 +36,10 @@ export const SFX = {
     } else if (surface === 'gravel') {
       noiseBurst({ type: 'highpass', freq: 1800, gain: 0.07, dur: 0.12 });
       noiseBurst({ freq: 4000, q: 2, gain: 0.04, dur: 0.08, delay: 0.02 });
+    } else if (surface === 'puddle') { // wet grass or stone in the rain: a squelchy splash
+      noiseBurst({ freq: 750, q: 0.9, gain: 0.08, dur: 0.18, attack: 0.008 });
+      noiseBurst({ type: 'highpass', freq: 3200, gain: 0.03, dur: 0.12, delay: 0.02 });
+      tone({ freq: 420, to: 700, gain: 0.012, dur: 0.06, delay: 0.01 });
     } else if (surface === 'water') {
       noiseBurst({ freq: 600, q: 0.8, gain: 0.07, dur: 0.25, attack: 0.02 });
     } else {
@@ -134,6 +138,13 @@ export const SFX = {
     if (!audible() || vol < 0.02) return;
     noiseBurst({ freq: 900, q: 0.9, gain: 0.07 * vol, dur: 1.4, attack: 0.25 });
     noiseBurst({ type: 'highpass', freq: 3500, gain: 0.02 * vol, dur: 1.2, attack: 0.3 });
+  },
+  drip(vol = 1, pitch = 1) { // a raindrop into a puddle: a short "plink" whose pitch leaps up
+    if (!audible() || vol < 0.02) return;
+    // A drop traps a bubble of air, which rings as it shrinks: a rising tone.
+    const f = (900 + Math.random() * 900) * pitch;
+    tone({ freq: f, to: f * 1.9, gain: 0.035 * vol, dur: 0.05, attack: 0.002 });
+    noiseBurst({ freq: 3000, q: 2, gain: 0.012 * vol, dur: 0.03, attack: 0.002 });
   },
   yip(vol = 1) { // happy little yip when petted
     if (!audible() || vol < 0.02) return;

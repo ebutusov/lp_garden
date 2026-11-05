@@ -44,6 +44,19 @@ export const FUJI_POS = new THREE.Vector3(-90, -2, -250);
 // walk out of the gateway as far as its edge.
 export const FOREST = { inner: 66, outer: 140 };
 
+// Where the sun and moon stand, as unit vectors from the viewer. The sun light shines
+// from SUN_DIR by day and swings round to MOON_DIR at night (syncShadow in lights.js),
+// so shadows always fall away from what's in the sky. The sun is high in the south-east,
+// behind you as you come in; the moon hangs low in the north-east, just over the
+// mountain ranges and to the right of Fuji.
+export const SUN_DIR = new THREE.Vector3(40, 60, 20).normalize();
+const MOON_AZIMUTH = 0.5, MOON_ELEVATION = 0.21; // radians: east of north, above the horizon
+export const MOON_DIR = new THREE.Vector3(
+  Math.sin(MOON_AZIMUTH) * Math.cos(MOON_ELEVATION),
+  Math.sin(MOON_ELEVATION),
+  -Math.cos(MOON_AZIMUTH) * Math.cos(MOON_ELEVATION),
+);
+
 // The arched bridge runs north-south across the pond at x = 0.
 export const BRIDGE_SPAN = (POND_R + 2) * 2; // long enough to land on both banks
 export const BRIDGE_RISE = 2.5;

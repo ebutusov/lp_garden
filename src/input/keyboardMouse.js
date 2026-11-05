@@ -2,6 +2,7 @@ import { env, player } from '../core/state.js';
 import { clampPitch } from '../player/look.js';
 import { toggleFly } from '../player/flight.js';
 import { setNight } from '../effects/dayNight.js';
+import { setRain } from '../effects/rain.js';
 import { sound, setSound } from '../audio/audio.js';
 import { helpVisible, showHelp, hideHelp } from '../ui/help.js';
 import { keys } from './keys.js';
@@ -9,7 +10,7 @@ import { touch } from './touch.js';
 import { lockPointer, isPointerLocked } from './pointerLock.js';
 
 // ---- Desktop controls: first-person mouse-look + WASD ----
-// One-shot actions (F, N, M, E, H) fire on keydown, ignoring auto-repeat. Every other
+// One-shot actions (F, N, R, M, E, H) fire on keydown, ignoring auto-repeat. Every other
 // key is just recorded as held in `keys` for movement to poll. E goes to `interaction`
 // (animals/interaction.js), which main.js hands over once it exists.
 export function setupKeyboardMouse({ interaction }) {
@@ -17,6 +18,7 @@ export function setupKeyboardMouse({ interaction }) {
     const k = e.key.toLowerCase();
     if (k === 'f') { if (!e.repeat) toggleFly(); }
     else if (k === 'n') { if (!e.repeat) setNight(!env.isNight); }
+    else if (k === 'r') { if (!e.repeat) setRain(!env.isRaining); }
     else if (k === 'm') { if (!e.repeat) setSound(!sound.on); }
     else if (k === 'e') { if (!e.repeat) interaction.tryInteract(); }
     else if (k === 'h') {

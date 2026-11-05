@@ -1,5 +1,5 @@
 import { camera, cameraGroup } from '../core/camera.js';
-import { player } from '../core/state.js';
+import { env, player } from '../core/state.js';
 import { POND_Z, WATER_LEVEL, inPond } from '../core/layout.js';
 import { bridgeDeckTop, PLAYER_HEIGHT } from '../core/physics.js';
 import { SFX } from '../audio/sfx.js';
@@ -27,7 +27,9 @@ function footstep(wading, p, feet, side) {
   const deck = bridgeDeckTop(p.x, p.z);
   const onDeck = deck !== null && Math.abs(feet - deck) < 0.3;
   const gravel = !onDeck && zenGarden.contains(p.x, p.z);
-  SFX.step(onDeck || teaHouse.contains(p.x, p.z) ? 'wood' : gravel ? 'gravel' : 'grass');
+  // In the rain the grass and the stepping stones are puddled: every step splashes.
+  const wet = env.rainMix > 0.5;
+  SFX.step(onDeck || teaHouse.contains(p.x, p.z) ? 'wood' : gravel ? 'gravel' : wet ? 'puddle' : 'grass');
   if (gravel) {
     // A footprint in the raked gravel, a little to the side of the camera. The player
     // faces (-sin yaw, -cos yaw), i.e. heading h = yaw + π; their left is (cos h, -sin h).

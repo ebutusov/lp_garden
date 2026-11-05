@@ -99,12 +99,19 @@ export class Physics {
   // walk on, and the Gardener rakes it smooth again), for an
   // animal of radius r whose own collision circle is `self`. `other` is one more collider
   // to overlook (say, whoever it's walking up to).
-  groundBlocked(x, z, r, self, other = null) {
+  // `house`: the tea house is allowed, for an animal sheltering from the rain. Its
+  // walls are solids of their own, so it still has to come in through the door.
+  groundBlocked(x, z, r, self, other = null, house = false) {
     if (Math.hypot(x, z - POND_Z) < POND_R + 1.2) return true;
     if (Math.abs(x) < BRIDGE_WIDTH / 2 + r && Math.abs(z - POND_Z) < BRIDGE_SPAN / 2 + r) return true; // bridge, with room for the body
-    if (Math.abs(x - TEA.x) < 4.8 && Math.abs(z - TEA.z) < 4.2) return true;
+    if (!house && this.nearTeaHouse(x, z)) return true;
     if (Math.hypot(x, z) > FENCE_R - 2) return true;
     return this.hitsSolid(x, z, r, self, other);
+  }
+
+  // The box round the tea house (with its doorstep) that animals keep out of.
+  nearTeaHouse(x, z) {
+    return Math.abs(x - TEA.x) < 4.8 && Math.abs(z - TEA.z) < 4.2;
   }
 
   // Would a circle of radius r at (x, z) overlap any solid, apart from the `ignore`d ones?

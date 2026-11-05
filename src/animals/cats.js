@@ -12,7 +12,9 @@ import { Animal } from './animal.js';
 // birds on the grass (and pounce, always a moment too late), and bolt when the dog comes
 // near. You can pet them, if they're in the mood. Their eyes shine in the dark, and
 // they leave paw prints on the raked gravel. When they're hungry or thirsty they go to
-// the bowls by the tea house, as long as the dog isn't there.
+// the bowls by the tea house, as long as the dog isn't there. In the rain they go
+// into the tea house and curl up till it stops; it's a truce: nobody runs from the
+// dog in there.
 const CAT_SPEED = { wander: 1.1, stalk: 0.7, flee: 4.5, pounce: 5 };
 const CAT_HUNGER = 1 / 200, CAT_THIRST = 1 / 130; // per second; at 1 it heads for a bowl
 const CAT_REACH = 0.48;                            // body centre to mouth, crouched over a bowl
@@ -36,14 +38,16 @@ const CAT_COATS = [
 ];
 
 // One cat: a state machine ('wander', 'sit', 'groom', 'loaf', 'stalk', 'pounce',
-// 'flee', 'bowl'), like the dog. `dog` and `birds` are what it reacts to.
+// 'flee', 'bowl', 'shelter'), like the dog. `dog` and `birds` are what it reacts to.
 class Cat extends Animal {
   static R = 0.3;       // collision radius
   static PET_R = 2.4;   // petting reach
 
-  constructor(ctx, { coat, parent, dog, birds, hearts, zenGarden, bowls }) {
+  constructor(ctx, { coat, parent, dog, birds, hearts, zenGarden, bowls, house }) {
     super(ctx, { radius: Cat.R, height: 0.8, parent }); // the player (and the dog) can't walk through a cat
-    Object.assign(this, { dog, birds, hearts, zenGarden, bowls });
+    Object.assign(this, { dog, birds, hearts, zenGarden, bowls, house });
+    this.shelter = null; // its trip to the tea house and back (see Animal.startShelter)
+    this.cozy = 'loaf';  // what it does at its shelter spot: 'loaf', 'sit' or 'groom'
     this.bowlKind = 'cat';
     this.hunger = Math.random() * 0.9;
     this.thirst = Math.random() * 0.9;
@@ -57,6 +61,7 @@ class Cat extends Animal {
     this.target = null;
     this.timer = 0;
     this.stuck = 0;
+    this.avoidSide = 1; // which way it last swerved round something
     this.prey = null;
     this.pounceT = 0;
     this.stalkCheck = 2 + Math.random() * 3;
@@ -141,20 +146,25 @@ class Cat extends Animal {
       const a = Math.random() * Math.PI * 2;
       const d = near ? minD + Math.random() * (maxD - minD) : 6 + Math.random() * 36;
       const x = (near ? near.x : 0) + Math.cos(a) * d, z = (near ? near.z : 0) + Math.sin(a) * d;
-      if (!this.blocked(x, z)) return { x, z };
+      // Never somewhere in the tea house: it may only be let in there to shelter.
+      if (!this.blocked(x, z) && !this.ctx.physics.nearTeaHouse(x, z)) return { x, z };
     }
     return { x: this.x, z: this.z };
   }
 
   // Head toward a goal, swerving around obstacles (same idea as the dog's steering).
   // Turns mostly on the spot first, so it doesn't run the wrong way (e.g. into the dog).
-  // `ignore`: a collider it means to walk right up to (a bowl).
+  // Like the dog it keeps swerving to the side it chose last; trying left and right in
+  // turn, it could flip between them every frame, face-on to a lantern, and never get
+  // round it. `ignore`: a collider it means to walk right up to (a bowl).
   steer(goal, wantSpeed, dt, turnRate = 4, ignore = null) {
     if (goal) {
       const reach = ignore ? clamp(Math.hypot(goal.x - this.x, goal.z - this.z), 0.2, 0.6) : 0.6;
-      const free = this.freeHeading(Math.atan2(goal.x - this.x, goal.z - this.z), CAT_FEELERS, reach, ignore);
+      const side = this.avoidSide;
+      const free = this.freeHeading(Math.atan2(goal.x - this.x, goal.z - this.z), CAT_FEELERS.map((o) => o * side), reach, ignore);
       if (!free) wantSpeed = 0;
       else {
+        if (free.off !== 0) this.avoidSide = Math.sign(free.off);
         let diff = free.angle - this.heading;
         diff = Math.atan2(Math.sin(diff), Math.cos(diff));
         this.heading += clamp(diff, -turnRate * dt, turnRate * dt);
@@ -174,8 +184,9 @@ class Cat extends Animal {
   // Petted by the player, or by `by` (the Gardener). True if it enjoyed it, false if it
   // walked off.
   pet(by = null) {
-    // Cats are cats: sometimes they'd rather not.
-    if (this.state !== 'loaf' && Math.random() < 0.3) {
+    // Cats are cats: sometimes they'd rather not. (Not while it's warm and dry out of
+    // the rain, though.)
+    if (this.state !== 'loaf' && this.state !== 'shelter' && Math.random() < 0.3) {
       this.state = 'wander';
       this.target = this.openSpot(by ?? cameraGroup.position, 8, 14);
       SFX.meow(distVol(this.x, this.z, 25));
@@ -201,7 +212,13 @@ class Cat extends Animal {
   update(dt, t) {
     const dog = this.dog;
     const toDog = Math.hypot(dog.x - this.x, dog.z - this.z);
-    if (toDog < 4 && this.state !== 'flee') {                       // the dog! run
+    // Rain: to the tea house, unless it's at a bowl or mid-pounce (it finishes first).
+    // When it stops, back out of the door.
+    // (Caught on its way out by another shower, it turns round and goes back in.)
+    if (this.raining && (this.state === 'shelter' ? this.shelter.phase === 'out' : !['bowl', 'pounce'].includes(this.state))) this.startShelter();
+    else if (!this.raining && this.state === 'shelter' && this.shelter.phase !== 'out') this.leaveShelter();
+    // The dog! Run. (But not from the shelter: in there it's a truce.)
+    if (toDog < 4 && this.state !== 'flee' && this.state !== 'shelter') {
       this.state = 'flee';
       this.timer = 2.5;
       const away = Math.atan2(this.x - dog.x, this.z - dog.z);
@@ -214,8 +231,8 @@ class Cat extends Animal {
     this.thirst += dt * CAT_THIRST;
     switch (this.state) {
       case 'wander': {
-        // Hungry or thirsty? To the bowls, unless the dog is hanging about there.
-        const meal = this.findMeal(CAT_REACH, dt);
+        // Hungry or thirsty? To the bowls, unless the dog is hanging about there (or it's raining).
+        const meal = this.raining ? null : this.findMeal(CAT_REACH, dt);
         if (meal && Math.hypot(dog.x - meal.bowl.x, dog.z - meal.bowl.z) > CAT_DOG_CLEAR) {
           this.state = 'bowl'; this.meal = meal; this.target = null; this.stuck = 0;
           break;
@@ -287,6 +304,26 @@ class Cat extends Animal {
         }
         break;
       }
+      case 'shelter': {
+        const g = this.shelterGoal(dt, 0.2);
+        if (g === 'done') { this.endShelter(); break; }
+        if (g) {
+          goal = g;
+          speed = this.shelter.path.length > 1 ? CAT_SPEED.wander : Math.min(CAT_SPEED.wander, Math.hypot(g.x - this.x, g.z - this.z) * 2 + 0.2);
+          break;
+        }
+        // Settled in the dry: mostly curled up asleep, now and then sitting up for a wash.
+        const diff = this.shelter.spot.heading - this.heading;
+        this.heading += clamp(Math.atan2(Math.sin(diff), Math.cos(diff)), -3 * dt, 3 * dt);
+        if (this.timer <= 0) {
+          const r = Math.random();
+          this.cozy = r < 0.6 ? 'loaf' : r < 0.8 ? 'sit' : 'groom';
+          this.timer = this.cozy === 'loaf' ? 15 + Math.random() * 20 : 4 + Math.random() * 5;
+        }
+        if (this.cozy === 'loaf') want.lie = 1;
+        else { want.sit = 1; if (this.cozy === 'groom') want.groom = 1; }
+        break;
+      }
       case 'flee':
         goal = this.target; speed = CAT_SPEED.flee;
         if (this.stuck > 0.3) { // cornered: try another way out
@@ -345,7 +382,8 @@ class Cat extends Animal {
     // Eyes: shut while napping, blink now and then, and shine at night.
     this.blink -= dt;
     if (this.blink < 0) this.blink = 2 + Math.random() * 4;
-    const open = this.state === 'loaf' && lie > 0.5 ? 0.15 : this.blink < 0.12 ? 0.2 : 1;
+    const napping = this.state === 'loaf' || (this.state === 'shelter' && this.cozy === 'loaf');
+    const open = napping && lie > 0.5 ? 0.15 : this.blink < 0.12 ? 0.2 : 1;
     for (const e of this.eyes) e.scale.y = open;
     this.eyeMat.emissiveIntensity = 1.4 * env.nightMix * open;
     // The odd meow while wandering.
@@ -358,13 +396,14 @@ class Cat extends Animal {
 }
 
 // All the cats. They run from the `dog`, stalk the `birds`, show `hearts` when petted,
-// leave paw prints in the `zenGarden` and eat and drink from the `bowls`.
+// leave paw prints in the `zenGarden`, eat and drink from the `bowls`, and shelter
+// from the rain in the tea `house`.
 export class Cats extends Feature {
   static PET_R = Cat.PET_R;
 
-  constructor(ctx, { dog, birds, hearts, zenGarden, bowls }) {
+  constructor(ctx, { dog, birds, hearts, zenGarden, bowls, house }) {
     super(ctx);
-    this.list = CAT_COATS.map((coat) => new Cat(ctx, { coat, parent: this.group, dog, birds, hearts, zenGarden, bowls }));
+    this.list = CAT_COATS.map((coat) => new Cat(ctx, { coat, parent: this.group, dog, birds, hearts, zenGarden, bowls, house }));
   }
 
   update(dt, t) {

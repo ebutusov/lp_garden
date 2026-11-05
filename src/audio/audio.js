@@ -8,7 +8,7 @@ import { showToast } from '../ui/toast.js';
 // Web Audio connects "nodes" into a graph: source → filter → gain → … → speakers.
 // Browsers only allow an AudioContext to start after a user gesture, which is one
 // reason sound starts switched off.
-export const sound = { on: false, ctx: null, master: null, noise: null, waterGain: null, fallsGain: null, nextBird: 0, nextCricket: 0 };
+export const sound = { on: false, ctx: null, master: null, noise: null, waterGain: null, fallsGain: null, rainGain: null, roofGain: null, nextBird: 0, nextCricket: 0, nextDrip: 0 };
 const soundBtn = document.getElementById('sound');
 
 function initAudio() {
@@ -43,7 +43,27 @@ function initAudio() {
   falls.connect(rumble).connect(fallsGain);
   fallsGain.connect(master);
   falls.start(0, 0.7); // from another point in the noise, so it doesn't echo the pond's loop
-  Object.assign(sound, { ctx, master, noise, waterGain, fallsGain });
+  // Rain: the hiss of countless drops is noise again, high and airy, over a soft wash
+  // lower down. Under the tea house roof it's a duller drumming instead: the same
+  // noise, low-passed (wood and paper take the top off it), on its own volume.
+  const rain = ctx.createBufferSource();
+  rain.buffer = noise; rain.loop = true;
+  const rainHiss = ctx.createBiquadFilter();
+  rainHiss.type = 'highpass'; rainHiss.frequency.value = 2200;
+  const rainWash = ctx.createBiquadFilter();
+  rainWash.type = 'bandpass'; rainWash.frequency.value = 900; rainWash.Q.value = 0.4;
+  const rainGain = ctx.createGain();
+  rainGain.gain.value = 0;
+  rain.connect(rainHiss).connect(rainGain);
+  rain.connect(rainWash).connect(rainGain);
+  rainGain.connect(master);
+  const roof = ctx.createBiquadFilter();
+  roof.type = 'lowpass'; roof.frequency.value = 450;
+  const roofGain = ctx.createGain();
+  roofGain.gain.value = 0;
+  rain.connect(roof).connect(roofGain).connect(master);
+  rain.start(0, 1.3);
+  Object.assign(sound, { ctx, master, noise, waterGain, fallsGain, rainGain, roofGain });
 }
 export function setSound(on) {
   sound.on = on;

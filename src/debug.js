@@ -3,7 +3,8 @@ import { cameraGroup } from './core/camera.js';
 import { M } from './core/materials.js';
 import { env, player } from './core/state.js';
 import { setNight } from './effects/dayNight.js';
-import { setSound } from './audio/audio.js';
+import { setRain } from './effects/rain.js';
+import { setSound, sound } from './audio/audio.js';
 import { clampPitch } from './player/look.js';
 import { updateStatus } from './player/flight.js';
 import { setHelpVisible } from './ui/help.js';
@@ -13,7 +14,7 @@ import { setHelpVisible } from './ui/help.js';
 //   garden.setView({ x: 0, y: 12, z: 10, yaw: 0, pitch: -0.8, fly: true })
 // main.js installs them once the garden is built, handing over what they inspect.
 export function installDebug(garden, { physics }) {
-  const { trees, lanterns, pond, flowers, steppingStones, koi, feeding, dog, birds, cats, gardener, butterflies, zenGarden, interaction, grass, bowls, stream, mountains, forest } = garden;
+  const { trees, lanterns, pond, flowers, steppingStones, koi, feeding, dog, birds, cats, gardener, butterflies, zenGarden, interaction, grass, bowls, stream, mountains, forest, clouds } = garden;
   const { solids, mounds } = physics;
   // Where an animal is with its meal: which bowl, whether it's got there, how far off it is.
   const meal = (a) => (a.state === 'bowl' ? {
@@ -55,6 +56,29 @@ export function installDebug(garden, { physics }) {
       setNight(on);
       if (instant) env.nightMix = on ? 1 : 0;
     },
+    // The colliders within r of (x, z), nearest first: what's in an animal's way there.
+    solidsNear(x, z, r = 2) {
+      const dist = (s) => (s.r !== undefined ? Math.hypot(x - s.x, z - s.z) - s.r
+        : Math.hypot(x - Math.max(s.minX, Math.min(x, s.maxX)), z - Math.max(s.minZ, Math.min(z, s.maxZ))));
+      return solids.map((s) => ({ ...s, gap: Math.round(dist(s) * 100) / 100 })).filter((s) => s.gap < r).sort((a, b) => a.gap - b.gap);
+    },
+    // garden.setRain(true) starts a shower; instant = true skips the fade, and the
+    // clouds' slower build-up (or clearing) too.
+    setRain(on, instant = false) {
+      setRain(on);
+      if (instant) env.rainMix = clouds.cover = on ? 1 : 0;
+    },
+    // The rain, and who's sheltering from it: each animal's state, where it is, and
+    // (while sheltering) how far along it is: 'in', 'stay' or 'out'. Plus the
+    // Gardener's activity and how far his umbrella is open (0 shut … 1 open), and the
+    // rain's sound: whether audio is running, and the outdoor and under-the-roof volumes.
+    rain: () => ({
+      raining: env.isRaining, mix: Math.round(env.rainMix * 100) / 100, cover: Math.round(clouds.cover * 100) / 100,
+      dog: { state: dog.state, shelter: dog.shelter?.phase ?? null, x: Math.round(dog.x * 10) / 10, z: Math.round(dog.z * 10) / 10 },
+      cats: cats.list.map((c) => ({ name: c.name, state: c.state, shelter: c.shelter?.phase ?? null, x: Math.round(c.x * 10) / 10, z: Math.round(c.z * 10) / 10 })),
+      gardener: { activity: gardener.activity, umbrella: Math.round((gardener.umbrella?.open ?? 0) * 100) / 100 },
+      sound: sound.ctx ? { state: sound.ctx.state, rain: Math.round(sound.rainGain.gain.value * 1000) / 1000, roof: Math.round(sound.roofGain.gain.value * 1000) / 1000 } : null,
+    }),
     setSound,
     feed: () => feeding.tryFeed(),
     // Pets whichever animal is in reach: 'dog', 'cat' (purred), 'cat:aloof' (walked off), or null.

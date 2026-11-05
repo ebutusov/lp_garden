@@ -6,17 +6,20 @@ import { Feature } from './feature.js';
 // An object pool: a fixed set of ring meshes is created once and reused, oldest first.
 // Creating and destroying meshes every time something touches the water would
 // allocate GPU buffers constantly and stutter on garbage collection.
+// The rain has a pool of its own (garden.js), so a downpour can't recycle the rings
+// of the koi, the footsteps and the bamboo spout before they've finished.
 const RIPPLE_COUNT = 40;
 // All rings share one unit-radius ring geometry; each is sized with its scale.
 const rippleGeo = new THREE.RingGeometry(0.92, 1, 32).rotateX(-Math.PI / 2);
 
 export class Ripples extends Feature {
-  constructor(ctx, { pond }) {
+  constructor(ctx, { pond, count = RIPPLE_COUNT }) {
     super(ctx, { parent: pond.group }); // inside the pond's group, so positions are pond-local
     this.pondR = pond.radius;
+    this.count = count;
     this.rings = [];
     this.next = 0;
-    for (let i = 0; i < RIPPLE_COUNT; i++) {
+    for (let i = 0; i < count; i++) {
       // Each ring needs its own material, because each fades at its own pace.
       const mesh = this.mesh(rippleGeo, new THREE.MeshBasicMaterial({
         color: 0xffffff, transparent: true, opacity: 0, depthWrite: false,
@@ -30,7 +33,7 @@ export class Ripples extends Feature {
     const d = Math.hypot(lx, lz), max = this.pondR - 0.3;
     if (d > max) { lx *= max / d; lz *= max / d; }
     const r = this.rings[this.next]; // oldest ring gets reused
-    this.next = (this.next + 1) % RIPPLE_COUNT;
+    this.next = (this.next + 1) % this.count;
     Object.assign(r, { age: 0, life, size });
     r.mesh.position.set(lx, 0, lz);
     r.mesh.visible = true;

@@ -234,7 +234,8 @@ class Butterfly extends Animal {
   }
 
   update(dt, t) {
-    const night = env.nightMix > 0.5;
+    // At night, or in the rain, they settle on the nearest free spot and stay there.
+    const night = env.nightMix > 0.5 || env.rainMix > 0.5;
     if (this.state === 'landed') this.rest(dt, t, night);
     else this.fly(dt, t, night);
     this.x = this.group.position.x;
