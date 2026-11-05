@@ -71,6 +71,9 @@ export function buildGarden(ctx, { anisotropy = 1, grassDensity = 1 } = {}) {
   // The rim has a gap where the stream flows in (the stream itself is built further down).
   const pond = new Pond(ctx, { z: POND_Z, radius: POND_R, inlet: { angle: STREAM_INLET, width: 2.6 } });
   const ripples = new Ripples(ctx, { pond });
+  // A second pool of rings just for raindrops (effects/rain.js), so a downpour can't
+  // take over the rings of the koi, footsteps and spout. Ripples draw nothing from ctx.rand.
+  const rainRipples = new Ripples(ctx, { pond, count: 64 });
   const feeding = new Feeding(ctx, { pond, ripples });
   const koi = new KoiSchool(ctx, { pond, ripples, feeding });
   const bridge = new Bridge(ctx, { z: POND_Z });
@@ -99,9 +102,9 @@ export function buildGarden(ctx, { anisotropy = 1, grassDensity = 1 } = {}) {
 
   // Animals: after every collider is in place.
   const hearts = new Hearts(ctx);
-  const dog = new Dog(ctx, { hearts, zenGarden, bowls });
+  const dog = new Dog(ctx, { hearts, zenGarden, bowls, house: teaHouse });
   const birds = new Birds(ctx, { perchSources: [lanterns, trees, torii, teaHouse, fence, stream], dog });
-  const cats = new Cats(ctx, { dog, birds, hearts, zenGarden, bowls });
+  const cats = new Cats(ctx, { dog, birds, hearts, zenGarden, bowls, house: teaHouse });
   // The birds watch out for the cats, but the cats need the birds (to stalk them), so
   // the birds are made first and told about the cats afterwards.
   birds.cats = cats;
@@ -123,7 +126,7 @@ export function buildGarden(ctx, { anisotropy = 1, grassDensity = 1 } = {}) {
   const interaction = new Interaction({ dog, cats, feeding, gardener });
 
   return {
-    sky, ground, fuji, clouds, mountains, forest, trees, lanterns, pond, ripples, bridge, torii, steppingStones,
+    sky, ground, fuji, clouds, mountains, forest, trees, lanterns, pond, ripples, rainRipples, bridge, torii, steppingStones,
     teaHouse, zenGarden, shishi, fence, rocks, flowers, teaThings, bowls, stream, grass,
     feeding, koi, hearts, dog, birds, cats, gardener, butterflies, interaction,
   };

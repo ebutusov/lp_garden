@@ -13,7 +13,8 @@ import { Animal } from '../animals/animal.js';
 // An old man who looks after the garden. He takes tea in the tea house (and spends the
 // night there), strolls over to admire the trees and flowers, feeds the koi, rakes the
 // gravel garden, pets the dog and the cats, fills their bowls by the tea house, and
-// bows when you greet him.
+// bows when you greet him. In the rain he walks under a paper umbrella, and keeps to
+// the quieter things: tea, a tree or a flower, the view.
 //
 // Three techniques carry him:
 //
@@ -88,10 +89,19 @@ const LOOK_UP = { headX: -0.55, lean: -0.05 };
 const CARRY = { rShX: -0.25, rEl: -0.5, rShZ: 0.15 }; // right hand on the upright rake
 const POUR_POUCH = { lShX: -1.05, lEl: -0.35, lElZ: -0.2 };  // kibble out of the bag, into a bowl
 const POUR_BUCKET = { rShX: -0.55, rEl: -0.45, rShZ: 0.05 }; // the bucket held out over the bowl
+// Holding the umbrella: the left forearm raised in front of his chest. These are
+// absolute angles, blended in by how far the umbrella is open, not an overlay: added
+// to a pose like 'behind' (arms back) they would twist his arm.
+const UMBRELLA_ARM = { lShX: -0.45, lShZ: 0.12, lEl: -1.35, lElZ: -0.3 };
+// What he doesn't do in the rain: they need both hands, or the animals are indoors.
+const RAIN_SKIPS = new Set(['feed', 'rake', 'fill', 'pet']);
 
 const tmp = new THREE.Vector3();
 const tmpQ = new THREE.Quaternion();
 const tmpE = new THREE.Euler();
+const tmpPeak = new THREE.Vector3();
+const tmpDir = new THREE.Vector3();
+const DOWN = new THREE.Vector3(0, -1, 0);
 
 export class Gardener extends Animal {
   static R = 0.35;        // collision radius
@@ -105,6 +115,7 @@ export class Gardener extends Animal {
     this.y = 0;             // height of the ground under him, eased
     this.build();
     this.buildRake();
+    this.buildUmbrella();
     this.heading = Math.PI / 2;
     this.speed = 0;         // signed: negative steps backwards (raking)
     this.moved = 0;         // distance actually covered this frame (see move())
@@ -228,6 +239,33 @@ export class Gardener extends Animal {
     this.rakeRest = { position: rake.position.clone(), quaternion: rake.quaternion.clone() };
   }
 
+  // A wagasa, a Japanese oiled-paper umbrella, in the janome ("snake's eye") pattern:
+  // red, with a white ring. Its origin is the canopy's peak, its shaft down along -Y.
+  // It lives in his root group, and animate() places it each frame from his left hand
+  // up to a point over his head, so it works whatever pose his arm is in.
+  // The canopy is three cones of the same slope stacked on the peak (red, a smaller
+  // white one, a smaller red one), each lifted a hair so the GPU doesn't flicker
+  // between them (z-fighting): red edge, white ring, red centre. Opening it is just
+  // scaling the canopy out from a tall, thin, furled shape.
+  buildUmbrella() {
+    const RED = mat(0xb5362a, { roughness: 0.75, side: THREE.DoubleSide });
+    const WHITE = mat(0xefe6d2, { roughness: 0.75, side: THREE.DoubleSide });
+    const u = this.umbrellaTool = new THREE.Group();
+    const canopy = new THREE.Group();
+    u.add(canopy);
+    const SLOPE = 0.38; // height per unit of radius
+    [[0.9, RED, 0], [0.62, WHITE, 0.004], [0.4, RED, 0.008]].forEach(([r, m, lift]) => {
+      const h = r * SLOPE;
+      this.mesh(new THREE.ConeGeometry(r, h, 14, 1, true), m, 0, -h / 2 + lift, 0, { cast: true, parent: canopy });
+    });
+    this.mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.08, 6), M.darkWood, 0, 0.03, 0, { parent: u }); // the tip
+    // The shaft: a unit-long bamboo rod hanging down from the peak, stretched to the hand.
+    const shaft = this.mesh(new THREE.CylinderGeometry(0.014, 0.014, 1, 5).translate(0, -0.5, 0), M.bamboo, 0, 0, 0, { cast: true, parent: u });
+    u.visible = false;
+    this.group.add(u);
+    this.umbrella = { canopy, shaft, open: 0 };
+  }
+
   // ---- Where he may go ----
   // Like the animals he keeps out of the pond and away from the fence, and walks round
   // anything solid; unlike them he may walk on the gravel and into the tea house. He
@@ -288,6 +326,8 @@ export class Gardener extends Animal {
       if (this.canTurn()) this.turnToward(Math.atan2(p.x - this.x, p.z - this.z), 3);
     } else {
       if (env.nightMix > 0.5 && this.activity !== 'tea') this.start('tea'); // nightfall: to the tea house
+      // Rain: put down whatever he can't do under an umbrella.
+      else if (env.isRaining && RAIN_SKIPS.has(this.activity)) this.start(this.pickActivity());
       if (!this.task) this.start(this.pickActivity());
       if (this.task.next().done) this.task = null;
     }
@@ -367,7 +407,7 @@ export class Gardener extends Animal {
   // ---- Activities ----
   pickActivity() {
     if (env.nightMix > 0.5) return 'tea';
-    const weights = {
+    const weights = env.isRaining ? { admire: 2, view: 1, tea: 3 } : {
       admire: 3, view: 1, tea: 1.5,
       feed: this.feeding.pellets.length ? 0 : 2,
       rake: this.zenGarden.prints >= 8 ? 4 : 1,      // a good few footprints in the gravel? Off to rake them
@@ -901,8 +941,10 @@ export class Gardener extends Animal {
     this.legs[1].thigh.rotation.x = rTh;
     this.legs[1].knee.rotation.x = rKn;
     const [L, R] = this.arms;
-    L.shoulder.rotation.set(J.lShX - armSwing - stroke * 1.2, 0, J.lShZ);
-    L.elbow.rotation.set(J.lEl, 0, J.lElZ);
+    // The umbrella arm: blend the left arm's joints toward holding it, by how open it is.
+    const u = this.umbrella.open, ua = (k) => J[k] + (UMBRELLA_ARM[k] - J[k]) * u;
+    L.shoulder.rotation.set(ua('lShX') - armSwing * (1 - u) - stroke * 1.2, 0, ua('lShZ'));
+    L.elbow.rotation.set(ua('lEl'), 0, ua('lElZ'));
     R.shoulder.rotation.set(J.rShX + (this.rakeHeld || this.bucketHeld ? 0 : armSwing) - stroke * 1.2, 0, -J.rShZ);
     R.elbow.rotation.set(J.rEl, 0, -J.rElZ);
 
@@ -928,8 +970,36 @@ export class Gardener extends Animal {
     this.head.rotation.y = this.lookYaw;
 
     this.animateRake(ease, stroke);
+    this.animateUmbrella(dt);
     this.animateCup(dt);
     this.animateBucket(dt);
+  }
+
+  // Up when it rains and he's out of doors; furled and put away under the tea house
+  // roof, or while he kneels. The shaft runs from a point above his head down to his
+  // left hand, both converted into his root group's frame (worldToLocal), and the
+  // umbrella is turned so its -Y axis points along it (setFromUnitVectors: the
+  // rotation that takes one direction onto another).
+  animateUmbrella(dt) {
+    const um = this.umbrella, tool = this.umbrellaTool;
+    const want = env.rainMix > 0.3 && !this.teaHouse.contains(this.x, this.z) && this.poseName !== 'seiza' ? 1 : 0;
+    um.open += (want - um.open) * Math.min(1, dt * 3);
+    tool.visible = um.open > 0.02;
+    if (!tool.visible) return;
+    const hand = this.hands.l.getWorldPosition(tmp);
+    this.group.worldToLocal(hand);
+    const peak = this.head.getWorldPosition(tmpPeak);
+    this.group.worldToLocal(peak);
+    peak.y += 0.62;
+    peak.z -= 0.05;
+    tool.position.copy(peak);
+    const dir = tmpDir.subVectors(hand, peak);
+    const len = dir.length();
+    tool.quaternion.setFromUnitVectors(DOWN, dir.normalize());
+    um.shaft.scale.y = len + 0.12; // a little of the handle shows below his hand
+    // Furled: thin, and three times as long, hanging round the shaft.
+    const o = um.open, w = 0.07 + 0.93 * o;
+    um.canopy.scale.set(w, 1 + 2 * (1 - o), w);
   }
 
   // In his hands the rake eases to where the activity wants it: upright at his side,

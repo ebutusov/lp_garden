@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { WIND_DIR, windStrength } from '../core/layout.js';
+import { env } from '../core/state.js';
 import { Feature } from './feature.js';
 
 // ---- Clouds ----
@@ -9,6 +10,14 @@ import { Feature } from './feature.js';
 const cloudGeo = new THREE.IcosahedronGeometry(1, 1);
 // Sky clouds drift with the wind and wrap around to the far side.
 const CLOUD_FIELD_R = 380;
+// In the rain the sky clouds swell into a heavy, lower cover: `cover` eases from 0
+// (fair weather) to 1 (rain) far more slowly than the rain itself fades in, so the
+// clouds keep building after the first drops, and break up slowly once it's over.
+const COVER_GROW = 15;    // seconds to build up to full cover
+const COVER_CLEAR = 25;   // seconds to shrink back to fair-weather clouds
+const RAIN_SPREAD = 2.8;  // how much wider and longer each cloud grows
+const RAIN_SWELL = 1.6;   // ...and how much taller
+const RAIN_DROP = 18;     // how much lower it hangs
 
 // `fuji` is the mountain that wears the belt and cap clouds.
 export class Clouds extends Feature {
@@ -17,12 +26,14 @@ export class Clouds extends Feature {
     const { position: foot, summit } = fuji;
     this.material = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 1, fog: false });
     this.fujiMaterial = this.material.clone(); // further away, so hazier
+    this.cover = 0; // 0 fair weather … 1 rain cover; dayNight.js darkens the clouds by it
 
     this.skyClouds = Array.from({ length: 16 }, () => {
       const cloud = this.makeCloud(8 + Math.random() * 8, 1 + Math.random() * 0.6, this.material);
       const a = Math.random() * Math.PI * 2, d = 60 + Math.random() * 300;
       cloud.position.set(Math.cos(a) * d, 70 + Math.random() * 35, Math.sin(a) * d);
       cloud.rotation.y = Math.random() * Math.PI;
+      cloud.userData.y = cloud.position.y; // its fair-weather height
       return cloud;
     });
 
@@ -62,8 +73,19 @@ export class Clouds extends Feature {
   }
 
   update(dt, t) {
+    // Build up or clear the cover at its own slow pace, then ease it (smoothstep) so
+    // the clouds start and finish growing gently rather than at a steady rate.
+    const target = env.isRaining ? 1 : 0;
+    const rate = dt / (target > this.cover ? COVER_GROW : COVER_CLEAR);
+    this.cover += Math.max(-rate, Math.min(rate, target - this.cover));
+    const k = this.cover * this.cover * (3 - 2 * this.cover);
+    // A cloud is one group of puffs, so scaling the group scales the whole cloud
+    // about its middle, puffs, gaps and all.
+    const spread = 1 + (RAIN_SPREAD - 1) * k, swell = 1 + (RAIN_SWELL - 1) * k;
     const drift = (1.5 + windStrength(t) * 2) * dt;
     for (const c of this.skyClouds) {
+      c.scale.set(spread, swell, spread);
+      c.position.y = c.userData.y - RAIN_DROP * k;
       c.position.x += WIND_DIR.x * drift;
       c.position.z += WIND_DIR.y * drift;
       // Past the edge of the field downwind (the dot product with the wind direction is

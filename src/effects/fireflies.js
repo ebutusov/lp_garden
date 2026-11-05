@@ -42,7 +42,8 @@ fireflyPoints.visible = false;
 scene.add(fireflyPoints);
 
 export function updateFireflies(t) {
-  const nightMix = env.nightMix;
+  // They don't come out in the rain.
+  const nightMix = env.nightMix * (1 - env.rainMix);
   // Invisible objects are skipped entirely, both drawing and this update.
   fireflyPoints.visible = nightMix > 0.01;
   if (!fireflyPoints.visible) return;

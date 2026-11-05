@@ -4,9 +4,12 @@
 // objects, which any importer can modify.
 
 // Day/night. `nightMix` fades from 0 (day) to 1 (night); anything with a night look reads it.
+// Rain works the same way: `isRaining` is the switch, `rainMix` fades 0 (clear) → 1 (rain).
 export const env = {
   isNight: false,
   nightMix: 0,
+  isRaining: false,
+  rainMix: 0,
 };
 
 // The player's aim and movement mode.

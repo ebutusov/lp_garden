@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { env } from '../core/state.js';
 import { Feature } from '../world/feature.js';
 
 // ---- Animal: the base class of the dog, the cats and the birds ----
@@ -10,7 +11,8 @@ import { Feature } from '../world/feature.js';
 // The helpers here are the parts the animals have in common, written once:
 // blob() builds body parts, blocked() asks whether a spot is off limits, and
 // freeHeading() is the obstacle-avoiding "feeler" steering of the dog and the cats.
-// findMeal() and eatFrom() are how the dog and the cats use their bowls (world/bowls.js).
+// findMeal() and eatFrom() are how the dog and the cats use their bowls (world/bowls.js),
+// and startShelter() / shelterGoal() how they wait out the rain in the tea house.
 
 // Every body part is the same 20-faced low-poly "sphere", scaled into shape, so all
 // of them share ONE geometry; only their transforms differ.
@@ -44,15 +46,21 @@ export class Animal extends Feature {
   // once it stops eating (it's had enough, or the dog turned up) every step from there
   // would count as blocked and it would be stuck. So the bowl doesn't count while the
   // animal still overlaps it, as long as the step doesn't take it any further in.
+  // That goes for any bowl, not just the one it ate from: the seats are close
+  // together, and drinking at the water bowl it can brush the cat bowl beside it.
   blocked(x, z, ignore = null) {
-    if (!ignore) {
-      const s = this.meal?.bowl.solid;
-      if (s) {
+    if (!ignore && this.bowls) {
+      for (const { solid: s } of this.bowls.list) {
         const now = Math.hypot(this.x - s.x, this.z - s.z);
-        if (now < s.r + this.radius && Math.hypot(x - s.x, z - s.z) >= now) ignore = s;
+        if (now < s.r + this.radius && Math.hypot(x - s.x, z - s.z) >= now) { ignore = s; break; }
       }
     }
-    return this.ctx.physics.groundBlocked(x, z, this.radius, this.solid, ignore);
+    // The tea house is open to it while it's sheltering, and also while it's still
+    // inside, whatever it's doing: otherwise every step would be blocked, and it
+    // would be shut in.
+    const physics = this.ctx.physics;
+    const house = this.state === 'shelter' || physics.nearTeaHouse(this.x, this.z);
+    return physics.groundBlocked(x, z, this.radius, this.solid, ignore, house);
   }
 
   // Height of the ground it stands on at (x, z).
@@ -64,10 +72,15 @@ export class Animal extends Feature {
   // order given, and return the first free one as { angle, off }, or null if every
   // direction is blocked. Far simpler than real path-finding, and good enough in an
   // open garden. `ignore` is a collider it means to go right up to (a bowl).
+  // Each feeler checks a point close by as well as the one `reach` ahead (as the
+  // Gardener's do): brushing past a tree trunk, the far point can be clear while the
+  // very next step isn't, and the animal would keep picking a heading it can't take.
   freeHeading(desired, offsets, reach, ignore = null) {
+    const near = Math.min(0.2, reach);
     for (const off of offsets) {
-      const angle = desired + off;
-      if (!this.blocked(this.x + Math.sin(angle) * reach, this.z + Math.cos(angle) * reach, ignore)) return { angle, off };
+      const angle = desired + off, sx = Math.sin(angle), cz = Math.cos(angle);
+      if (!this.blocked(this.x + sx * near, this.z + cz * near, ignore) &&
+          !this.blocked(this.x + sx * reach, this.z + cz * reach, ignore)) return { angle, off };
     }
     return null;
   }
@@ -128,6 +141,76 @@ export class Animal extends Feature {
     const done = meal.t >= duration || meal.bowl.level <= 0;
     if (done) this[meal.drink ? 'thirst' : 'hunger'] = Math.max(0, 1 - meal.got / portion);
     return done;
+  }
+
+  // ---- Shelter from the rain ----
+  // When it rains the dog and the cats go into the tea house (`this.house`), each to
+  // a spot of its own (TeaHouse.claimShelter), and wait there till it stops. The trip
+  // is a list of waypoints in (round the pond and the house, then through the door)
+  // and later a list out. `this.shelter` is { spot, path, phase, best, since }, where
+  // phase is 'in', 'stay' or 'out'.
+  get raining() {
+    return env.isRaining && !!this.house;
+  }
+
+  // Off to the tea house (back in, if it was on its way out). False if there's no
+  // spot left for it.
+  startShelter() {
+    if (this.shelter) this.house.releaseShelter(this.shelter.spot, this);
+    const spot = this.house.claimShelter(this);
+    if (!spot) return false;
+    this.shelter = { spot, phase: 'in', path: this.house.shelterRoute(this.x, this.z, spot), best: Infinity, since: 0, tries: 0 };
+    this.state = 'shelter';
+    this.target = null;
+    return true;
+  }
+
+  // The rain has stopped: back out through the door (or straight off, if it never got in).
+  leaveShelter() {
+    const s = this.shelter;
+    this.house.releaseShelter(s.spot, this);
+    Object.assign(s, { phase: 'out', path: this.house.exitRoute(this.x, this.z), best: Infinity, since: 0 });
+  }
+
+  // One frame of the trip. Returns the point to head for; null once it's at its spot
+  // (phase 'stay'); or 'done' when it's back outside after the rain, and should get
+  // on with its day. Like mealGoal, it watches its progress: stuck on the way in for a
+  // while, it stays where it is (a tree is some shelter); stuck on the way out, it
+  // tries the door again while it's still indoors, and once outside just carries on.
+  shelterGoal(dt, arrive) {
+    const s = this.shelter;
+    if (s.phase === 'stay') return null;
+    while (s.path.length > 1 && Math.hypot(s.path[0].x - this.x, s.path[0].z - this.z) < 0.6) {
+      s.path.shift();
+      s.best = Infinity;
+    }
+    let g = s.path[0];
+    const d = g ? Math.hypot(g.x - this.x, g.z - this.z) : 0;
+    if (d < s.best - 0.3) { s.best = d; s.since = 0; } else s.since += dt;
+    // Held up on the way out (the Gardener in the doorway, say) but still indoors:
+    // giving up there would leave it wandering about inside, so try the door again.
+    // Held up on the way in, outside: plan the route afresh from here, twice, before
+    // settling for wherever it's got to.
+    const indoors = this.ctx.physics.nearTeaHouse(this.x, this.z); // the whole no-go box, doorstep too
+    if (s.since > 8 && (s.phase === 'out' ? indoors : !indoors && s.tries < 2)) {
+      if (s.phase === 'in') s.tries++;
+      const path = s.phase === 'out' ? this.house.exitRoute(this.x, this.z) : this.house.shelterRoute(this.x, this.z, s.spot);
+      Object.assign(s, { path, best: Infinity, since: 0 });
+      g = s.path[0];
+    }
+    if (!g || (s.path.length === 1 && d < arrive) || s.since > 8) {
+      if (s.phase === 'out') return 'done';
+      s.phase = 'stay';
+      return null;
+    }
+    return g;
+  }
+
+  // The rain is over and it's out of the door: on with its day.
+  endShelter() {
+    this.shelter = null;
+    this.state = 'wander';
+    this.target = null;
   }
 
   // Paw prints in the raked gravel. The walk cycle `phase` passes a multiple of π

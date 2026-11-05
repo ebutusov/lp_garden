@@ -17,6 +17,7 @@ import { buildGarden } from './garden.js';
 import { initPetals, updatePetals } from './effects/petals.js';
 import { updateFireflies } from './effects/fireflies.js';
 import { initDayNight, updateDayNight } from './effects/dayNight.js';
+import { initRain, updateRain } from './effects/rain.js';
 
 import { updateLook } from './player/look.js';
 import { initMovement, updateMovement } from './player/movement.js';
@@ -45,12 +46,13 @@ const garden = buildGarden(ctx, {
   grassDensity: matchMedia('(pointer: coarse)').matches ? 0.5 : 1,
 });
 const {
-  sky, grass, pond, koi, feeding, ripples, trees, shishi, stream, dog, hearts, birds, cats, gardener, butterflies, teaThings, bowls, zenGarden, clouds, lanterns,
+  sky, grass, pond, koi, feeding, ripples, rainRipples, trees, shishi, stream, dog, hearts, birds, cats, gardener, butterflies, teaThings, bowls, zenGarden, clouds, lanterns,
 } = garden;
 
 // Hand the function modules the parts of the garden they need.
 initPetals(garden);
 initDayNight(garden);
+initRain(garden, { density: matchMedia('(pointer: coarse)').matches ? 0.5 : 1 });
 initMovement(ctx.physics);
 initFootsteps(garden);
 initHint(garden);
@@ -75,6 +77,7 @@ function animate() {
 
   // Re-anchored after the final position (sun tracking goes here, not in setup)
   syncShadow();
+  updateRain(dt, t);  // before day/night, which reads this frame's rainMix
   updateDayNight(dt);
   sky.update(dt, t); // moves the sky, stars and moon with the player
 
@@ -82,6 +85,7 @@ function animate() {
   koi.update(dt, t);
   feeding.update(dt, t);
   ripples.update(dt, t);
+  rainRipples.update(dt, t);
   trees.update(dt, t);
   grass.update(dt, t);
   updatePetals(dt, t);

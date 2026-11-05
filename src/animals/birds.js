@@ -98,7 +98,8 @@ class Bird extends Animal {
     const here = perchWorld(this.perch, bTmpA).clone();
     const night = env.nightMix > 0.5;
     let target = null;
-    if (!scaredBy && !night && !this.sp.highOnly && Math.random() < 0.25) target = this.flock.groundSpot();
+    // Never down onto the grass at night, nor in the rain: perches only.
+    if (!scaredBy && !night && env.rainMix < 0.5 && !this.sp.highOnly && Math.random() < 0.25) target = this.flock.groundSpot();
     if (!target) {
       const options = this.flock.perches.filter((p) => {
         if (p.bird || p === this.perch || (this.sp.highOnly && !p.high)) return false;

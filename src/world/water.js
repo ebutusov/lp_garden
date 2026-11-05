@@ -16,9 +16,35 @@ import * as THREE from 'three';
 //  - a round edge: the mesh is a square grid, and pixels beyond the pond's radius are
 //    thrown away (discard). The ragged cut is hidden under the stone rim.
 //
+//  - dimmers for the glints: the specular highlight of a smooth surface is a
+//    near-mirror image of the light, and when the low moon shines straight across the
+//    pond at you it outshines everything. uGlint scales the sun's (or moon's), and
+//    uLampGlint the lanterns', so the lit lanterns don't blaze back off the water.
+//
 // The shader code here goes in as plain strings, replacing #include lines. Each
 // #include <name> pulls in one of three's shader "chunks"; their names are stable
 // within a three version (r160 here).
+
+// three's lighting chunk loops over each kind of light, calling RE_Direct for each one
+// (which adds that light's diffuse and specular share to reflectedLight). Here the call
+// in the point-light loop (the lanterns) and in the directional loop (sun/moon) is
+// wrapped so only its specular share is scaled, by uLampGlint and uGlint.
+const LIGHT_CALL = 'RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );';
+function scaleSpecular(chunk, loopMarker, uniform) {
+  const at = chunk.indexOf(LIGHT_CALL, chunk.indexOf(loopMarker));
+  if (chunk.indexOf(loopMarker) < 0 || at < 0) throw new Error(`water.js: lighting chunk changed near ${loopMarker}`);
+  // Braces give specBefore its own scope: three "unrolls" these loops, pasting the
+  // body once per light with no braces round each copy.
+  return chunk.slice(0, at) + /* glsl */`{
+    vec3 specBefore = reflectedLight.directSpecular;
+    ${LIGHT_CALL}
+    reflectedLight.directSpecular = specBefore + (reflectedLight.directSpecular - specBefore) * ${uniform};
+  }` + chunk.slice(at + LIGHT_CALL.length);
+}
+const LIGHTS_GLSL = scaleSpecular(
+  scaleSpecular(THREE.ShaderChunk.lights_fragment_begin, 'directionalLights[ i ]', 'uGlint'),
+  'pointLights[ i ]', 'uLampGlint',
+);
 
 const WAVE_GLSL = /* glsl */`
   uniform float uTime;
@@ -43,6 +69,8 @@ export function makeWaterMaterial(radius) {
     uTime: { value: 0 },
     uMirror: { value: null },                    // the reflection texture
     uMirrorMatrix: { value: new THREE.Matrix4() }, // water vertex → place in that texture
+    uGlint: { value: 1 },                        // sun/moon highlight strength (dayNight.js)
+    uLampGlint: { value: 0.35 },                 // lanterns' highlight strength
   };
 
   material.onBeforeCompile = (shader) => {
@@ -63,9 +91,12 @@ export function makeWaterMaterial(radius) {
       .replace('#include <common>', /* glsl */`
         #include <common>
         uniform sampler2D uMirror;
+        uniform float uGlint;
+        uniform float uLampGlint;
         varying vec2 vPondPos;
         varying vec4 vMirrorCoord;
       `)
+      .replace('#include <lights_fragment_begin>', LIGHTS_GLSL)
       .replace('#include <clipping_planes_fragment>', /* glsl */`
         #include <clipping_planes_fragment>
         float pondR = length(vPondPos);
