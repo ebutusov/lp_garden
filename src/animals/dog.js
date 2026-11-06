@@ -313,7 +313,7 @@ export class Dog extends Animal {
     this.stepPrint(before, 0.5, 0.12);
     const swing = Math.sin(this.phase) * 0.55 * moving * (1 - sit);
     const hipY = 0.52 + (0.24 - 0.52) * sit;
-    this.group.position.set(this.x, this.groundAt(this.x, this.z), this.z);
+    this.group.position.set(this.x, this.footY(dt), this.z);
     this.group.rotation.y = this.heading;
     this.torso.position.y = hipY + Math.abs(Math.sin(this.phase)) * 0.03 * moving;
     this.torso.rotation.x = -0.55 * sit;                       // sitting tips the body up

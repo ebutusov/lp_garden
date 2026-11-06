@@ -58,6 +58,7 @@ export class Physics {
   constructor() {
     this.solids = [];     // circles {x, z, r, h} and boxes {minX, maxX, minZ, maxZ, h}; block below height h
     this.platforms = [];  // walkable boxes {minX, maxX, minZ, maxZ, y}
+    this.pads = [];       // walkable discs {x, z, r, y}: the tops of the stepping stones
     this.mounds = [];     // grass bumps {x, z, r}
   }
 
@@ -77,17 +78,26 @@ export class Physics {
     this.platforms.push(p);
     return p;
   }
+  addPad(x, z, r, y) {
+    const p = { x, z, r, y };
+    this.pads.push(p);
+    return p;
+  }
   addMound(x, z, r) {
     const m = { x, z, r };
     this.mounds.push(m);
     return m;
   }
 
-  // Height of the walkable ground features at (x, z): tea house floor, gravel garden, mounds.
+  // Height of the walkable ground features at (x, z): tea house floor, gravel garden,
+  // stepping stones, mounds.
   surfaceHeightAt(x, z) {
     let h = 0;
     for (const pl of this.platforms) {
       if (x >= pl.minX && x <= pl.maxX && z >= pl.minZ && z <= pl.maxZ) h = Math.max(h, pl.y);
+    }
+    for (const pd of this.pads) {
+      if ((x - pd.x) ** 2 + (z - pd.z) ** 2 < pd.r * pd.r) h = Math.max(h, pd.y);
     }
     // A mound is a cone sunk halfway into the ground: its visible top has radius r/2
     // and peak 0.3·r, so the height falls off linearly with distance from the centre.

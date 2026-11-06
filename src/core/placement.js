@@ -1,6 +1,6 @@
 import {
   FENCE_R, POND_Z, POND_R, LANTERN_SPOTS, PATH_LANTERN_SPOTS, TORII_Z, TEA, TEA_PATH, BOWLS, ZEN, SHISHI,
-  FALLS, STREAM_BANK, streamCourse,
+  FALLS, STREAM_BANK, streamCourse, TSUKUBAI, BELL,
 } from './layout.js';
 
 // ---- Placement: keep randomly placed props from overlapping each other ----
@@ -61,5 +61,8 @@ export class Placement {
     this.reserve(SHISHI.x, SHISHI.z, 2.5);
     this.reserve(FALLS.x, FALLS.z, FALLS.r);                               // rockery and waterfall
     for (const s of streamCourse(0.8)) this.reserve(s.x, s.z, s.w / 2 + STREAM_BANK); // the stream and its banks
+    // Added after the layout was fixed, on ground nothing random had used, so garden.fingerprint() is unchanged.
+    this.reserve(TSUKUBAI.x, TSUKUBAI.z, 1.2);                             // wash basin and its stones
+    this.reserve(BELL.x, BELL.z, 1.8);                                     // bell frame
   }
 }

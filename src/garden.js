@@ -1,6 +1,6 @@
 import {
   GROUND_R, POND_Z, POND_R, FENCE_R, FENCE_GAP, FENCE_H, TEA, TEA_PATH, BOWLS, ZEN, SHISHI, TORII_Z,
-  LANTERN_SPOTS, PATH_LANTERN_SPOTS, PATH_LANTERN_SCALE, PATH_LANTERN_GLOW, TREE_SPOTS, FUJI_POS, STREAM_INLET,
+  LANTERN_SPOTS, PATH_LANTERN_SPOTS, PATH_LANTERN_SCALE, PATH_LANTERN_GLOW, TREE_SPOTS, FUJI_POS, STREAM_INLET, TSUKUBAI, BELL,
 } from './core/layout.js';
 import { Sky } from './world/sky.js';
 import { Ground } from './world/ground.js';
@@ -24,6 +24,8 @@ import { Flowers } from './world/flowers.js';
 import { TeaThings } from './world/teaThings.js';
 import { Bowls } from './world/bowls.js';
 import { Stream } from './world/stream.js';
+import { Tsukubai } from './world/tsukubai.js';
+import { Bell } from './world/bell.js';
 import { Grass } from './world/grass.js';
 import { Feeding } from './animals/feeding.js';
 import { KoiSchool } from './animals/koi.js';
@@ -92,19 +94,26 @@ export function buildGarden(ctx, { anisotropy = 1, grassDensity = 1 } = {}) {
   // The rockery, waterfall and stream (FALLS, STREAM in layout.js). Its stones come from
   // its own seeded generator, so it draws nothing from ctx.rand either.
   const stream = new Stream(ctx, { pond, ripples });
+  // By the tea path: the stone wash basin, where the Gardener rinses his hands before
+  // tea, and the little temple bell. Fixed, and their pebbles come from their own
+  // generator, so neither draws from ctx.rand; their colliders were added after the
+  // layout was fixed, so the fingerprint leaves them out, like the bowls' and the stream's.
+  const tsukubai = new Tsukubai(ctx, { x: TSUKUBAI.x, z: TSUKUBAI.z });
+  const bell = new Bell(ctx, { x: BELL.x, z: BELL.z });
   // The woodland outside the fence: scenery only (no colliders, its own seeded
   // generator). After the ground, whose mounds it stands on.
   const forest = new Forest(ctx, { fuji, density: grassDensity });
   // The lawn: after every fixed feature, whose colliders and platforms it grows around.
   // It has its own seeded generator, so it doesn't use (or shift) ctx.rand.
   const grass = new Grass(ctx, {
-    stones: [...steppingStones.footprints(), ...bowls.footprints(), ...stream.footprints()], density: grassDensity,
+    stones: [...steppingStones.footprints(), ...bowls.footprints(), ...stream.footprints(), ...tsukubai.footprints(),
+      ...bell.footprints()], density: grassDensity,
   });
 
   // Animals: after every collider is in place.
   const hearts = new Hearts(ctx);
   const dog = new Dog(ctx, { hearts, zenGarden, bowls, house: teaHouse });
-  const birds = new Birds(ctx, { perchSources: [lanterns, trees, torii, teaHouse, fence, stream], dog });
+  const birds = new Birds(ctx, { perchSources: [lanterns, trees, torii, teaHouse, fence, stream, bell], dog });
   const cats = new Cats(ctx, { dog, birds, hearts, zenGarden, bowls, house: teaHouse });
   // The birds watch out for the cats, but the cats need the birds (to stalk them), so
   // the birds are made first and told about the cats afterwards.
@@ -115,16 +124,16 @@ export function buildGarden(ctx, { anisotropy = 1, grassDensity = 1 } = {}) {
   // only from Math.random, so building him after everything that uses ctx.rand leaves
   // the layout alone.
   const gardener = new Gardener(ctx, {
-    teaHouse, teaThings, bowls, zenGarden, pond, feeding, trees, flowers, fuji, dog, cats, fenceR: FENCE_R,
+    teaHouse, teaThings, tsukubai, bowls, zenGarden, pond, feeding, trees, flowers, fuji, dog, cats, fenceR: FENCE_R,
   });
   // Butterflies land on the low things (flowers, stones, rocks) and take off when the
   // dog, a cat or the Gardener comes by.
   const butterflies = new Butterflies(ctx, {
-    landingSources: [flowers, steppingStones, rocks, zenGarden, stream], teaHouse, scarers: [dog, ...cats.list, gardener],
+    landingSources: [flowers, steppingStones, rocks, zenGarden, stream, tsukubai], teaHouse, scarers: [dog, ...cats.list, gardener],
   });
   // The dog, the cats and the Gardener part the grass as they walk through it.
   grass.pushers = [dog, ...cats.list, gardener];
-  const interaction = new Interaction({ dog, cats, feeding, gardener });
+  const interaction = new Interaction({ dog, cats, feeding, gardener, bell });
 
   // Fuse each static feature's meshes into one per material (Feature.mergeStatic), to
   // cut the draw calls. Last, so the perches and landing spots above were worked out
@@ -133,7 +142,7 @@ export function buildGarden(ctx, { anisotropy = 1, grassDensity = 1 } = {}) {
   // ripples live in its group), the bowls (the bucket and the food move or come and
   // go), the fence (already instanced) and the animals.
   for (const f of [ground, clouds, trees, lanterns, bridge, torii, steppingStones, teaHouse, teaThings, zenGarden, shishi,
-    rocks, flowers, stream]) {
+    rocks, flowers, stream, tsukubai, bell]) {
     f.mergeStatic();
   }
   // The animals move, so they can't be merged, but their tiniest parts can stop casting
@@ -142,7 +151,7 @@ export function buildGarden(ctx, { anisotropy = 1, grassDensity = 1 } = {}) {
 
   return {
     sky, ground, fuji, clouds, mountains, forest, trees, lanterns, pond, ripples, rainRipples, bridge, torii, steppingStones,
-    teaHouse, zenGarden, shishi, fence, rocks, flowers, teaThings, bowls, stream, grass,
+    teaHouse, zenGarden, shishi, fence, rocks, flowers, teaThings, bowls, stream, tsukubai, bell, grass,
     feeding, koi, hearts, dog, birds, cats, gardener, butterflies, interaction,
   };
 }

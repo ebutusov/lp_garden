@@ -103,6 +103,14 @@ export class Animal extends Feature {
     return this.ctx.physics.surfaceHeightAt(x, z);
   }
 
+  // The height its feet stand at this frame: the ground under it, eased, so stepping
+  // up onto a stepping stone (or down off one) takes a few frames instead of a pop.
+  footY(dt) {
+    const g = this.groundAt(this.x, this.z);
+    this.feetY = this.feetY === undefined ? g : this.feetY + (g - this.feetY) * Math.min(1, dt * 14);
+    return this.feetY;
+  }
+
   // "Feelers": probe a point `reach` ahead at each heading desired + offset, in the
   // order given, and return the first free one as { angle, off }, or null if every
   // direction is blocked. Far simpler than real path-finding, and good enough in an

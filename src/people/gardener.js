@@ -10,8 +10,8 @@ import { showToast } from '../ui/toast.js';
 import { Animal } from '../animals/animal.js';
 
 // ---- The Gardener ----
-// An old man who looks after the garden. He takes tea in the tea house (and spends the
-// night there), strolls over to admire the trees and flowers, feeds the koi, rakes the
+// An old man who looks after the garden. He takes tea in the tea house (rinsing his
+// hands at the stone basin on the way in, and spending the night there), strolls over to admire the trees and flowers, feeds the koi, rakes the
 // gravel garden, pets the dog and the cats, fills their bowls by the tea house, and
 // bows when you greet him. In the rain he walks under a paper umbrella, and keeps to
 // the quieter things: tea, a tree or a flower, the view.
@@ -89,6 +89,11 @@ const LOOK_UP = { headX: -0.55, lean: -0.05 };
 const CARRY = { rShX: -0.25, rEl: -0.5, rShZ: 0.15 }; // right hand on the upright rake
 const POUR_POUCH = { lShX: -1.05, lEl: -0.35, lElZ: -0.2 };  // kibble out of the bag, into a bowl
 const POUR_BUCKET = { rShX: -0.55, rEl: -0.45, rShZ: 0.05 }; // the bucket held out over the bowl
+// At the wash basin, crouching: reach down to the water with the dipper, hold it up
+// in front of him, and hold out his left hand under it to be rinsed.
+const DIP = { rShX: -0.55, rEl: -0.05, lean: 0.12 };
+const HOLD_DIPPER = { rShX: -0.45, rEl: -0.65, rElZ: -0.2 };
+const LEFT_OUT = { lShX: -0.6, lEl: -0.55, lElZ: -0.35 };
 // Holding the umbrella: the left forearm raised in front of his chest. These are
 // absolute angles, blended in by how far the umbrella is open, not an overlay: added
 // to a pose like 'behind' (arms back) they would twist his arm.
@@ -99,6 +104,7 @@ const RAIN_SKIPS = new Set(['feed', 'rake', 'fill', 'pet']);
 const tmp = new THREE.Vector3();
 const tmpQ = new THREE.Quaternion();
 const tmpE = new THREE.Euler();
+const dipperE = new THREE.Euler(0, 0, 0, 'YZX');
 const tmpPeak = new THREE.Vector3();
 const tmpDir = new THREE.Vector3();
 const DOWN = new THREE.Vector3(0, -1, 0);
@@ -108,10 +114,10 @@ export class Gardener extends Animal {
   static GREET_R = 2.8;   // how close the player must be to greet him
 
   constructor(ctx, {
-    teaHouse, teaThings, bowls, zenGarden, pond, feeding, trees, flowers, fuji, dog, cats, fenceR, x = -20, z = 4,
+    teaHouse, teaThings, tsukubai, bowls, zenGarden, pond, feeding, trees, flowers, fuji, dog, cats, fenceR, x = -20, z = 4,
   }) {
     super(ctx, { x, z, radius: Gardener.R, height: 2 });
-    Object.assign(this, { teaHouse, teaThings, bowls, zenGarden, pond, feeding, trees, flowers, fuji, dog, cats, fenceR });
+    Object.assign(this, { teaHouse, teaThings, tsukubai, bowls, zenGarden, pond, feeding, trees, flowers, fuji, dog, cats, fenceR });
     this.y = 0;             // height of the ground under him, eased
     this.build();
     this.buildRake();
@@ -132,6 +138,7 @@ export class Gardener extends Animal {
     this.greetT = 0;
     this.held = null;       // a tea cup in his hand: { cup, w, want, tilt, tiltNow }
     this.bucketHeld = null; // the water bucket, likewise: { w, want, tilt, tiltNow }
+    this.dipperHeld = null; // the wash basin's dipper: { w, want, pitch, pitchNow, roll, rollNow }
     this.rakeHeld = false;
     this.rakeMode = 'carry';
     this.activity = null;
@@ -444,6 +451,7 @@ export class Gardener extends Animal {
       if (this.held) this.held.want = 0;
       if (this.rakeHeld) this.putRakeDown(true);
       if (this.bucketHeld) this.putBucketDown(true);
+      if (this.dipperHeld) this.putDipperDown(true);
       this.activity = null;
     }
   }
@@ -512,14 +520,16 @@ export class Gardener extends Animal {
     yield* this.followPath(path.slice(0, nearest + 1).reverse());
   }
 
-  // -- Tea: in through the door, kneel at the table, sip now and then. At night he
-  // stays (the lamp is lit), until morning comes.
+  // -- Tea: rinse his hands at the basin, in through the door, kneel at the table, sip
+  // now and then. At night he stays (the lamp is lit), until morning comes.
   *tea() {
     const { seat } = this.teaHouse;
     const { path, nearest } = this.housePath();
     if (this.teaHouse.contains(this.x, this.z)) {
       yield* this.followPath(path.slice(nearest));
     } else {
+      // Not in the rain: his left hand is holding the umbrella.
+      if (!env.isRaining) yield* this.rinse();
       if (!(yield* this.walkTo(path[0], { tol: 0.5 }))) return;
       yield* this.followPath(path.slice(1));
     }
@@ -539,6 +549,71 @@ export class Gardener extends Animal {
     this.poseName = 'stand';
     yield* this.wait(1.2);
     yield* this.followPath(path.slice(0, -1).reverse());
+  }
+
+  // -- Rinse his hands at the stone basin, as guests do on their way in to tea: crouch
+  // on the front stone, take up the dipper in his right hand, fill it, pour it over his
+  // left hand, then stand it on end so the last of the water runs down the handle,
+  // rinsing it for whoever comes next, and lay it back across the basin.
+  // Also an activity of its own (gardenerDo('rinse')), for testing.
+  *rinse() {
+    const spot = this.tsukubai.standSpot();
+    if (!(yield* this.walkTo(spot, { tol: 0.3, timeout: 40 }))) return; // can't get there: straight in to tea
+    yield* this.followPath([spot]); // the last step exactly onto the front stone
+    yield* this.face(spot.heading);
+    const basin = this.tsukubai.group.position;
+    this.lookAt = basin;
+    this.poseName = 'crouch';
+    yield* this.wait(0.9);
+    this.overlay = DIP;
+    yield* this.wait(0.6);
+    // Pick it up, and dip the cup in the water: its far end down (pitch is about the
+    // handle's cross axis: positive raises the cup end).
+    this.dipperHeld = { w: 0, want: 1, pitch: -0.35, pitchNow: 0, roll: 0, rollNow: 0 };
+    yield* this.wait(0.8);
+    SFX.plop(0.6 * distVol(this.x, this.z, 15));
+    yield* this.wait(0.4);
+    this.overlay = HOLD_DIPPER;
+    this.dipperHeld.pitch = 0.1;
+    yield* this.wait(0.8);
+    // Left hand out under it, and tip the cup over it (roll about the handle).
+    this.overlay = { ...HOLD_DIPPER, ...LEFT_OUT };
+    yield* this.wait(0.6);
+    this.dipperHeld.roll = 1.5;
+    SFX.trickle(distVol(this.x, this.z, 15));
+    yield* this.wait(1.5);
+    this.dipperHeld.roll = 0;
+    this.overlay = HOLD_DIPPER;
+    yield* this.wait(0.5);
+    // Upright, cup at the top: what's left runs down the handle.
+    this.dipperHeld.pitch = 1.3;
+    yield* this.wait(0.6);
+    SFX.trickle(0.5 * distVol(this.x, this.z, 15), 0.9);
+    yield* this.wait(1.1);
+    this.dipperHeld.pitch = 0;
+    this.overlay = DIP;
+    yield* this.wait(0.5);
+    this.putDipperDown(false);
+    yield* this.wait(0.7);
+    this.overlay = null;
+    this.poseName = 'stand';
+    this.lookAt = null;
+    yield* this.wait(1);
+  }
+
+  // Let go of the dipper: animateDipper() eases it back across the basin (or `snap`
+  // puts it straight there, if he's interrupted).
+  putDipperDown(snap) {
+    const h = this.dipperHeld;
+    if (!h) return;
+    h.want = 0;
+    h.pitch = h.roll = 0;
+    if (snap) {
+      const { dipper, dipperRest } = this.tsukubai;
+      dipper.position.copy(dipperRest.position);
+      dipper.quaternion.copy(dipperRest.quaternion);
+      this.dipperHeld = null;
+    }
   }
 
   // Reach for the cup, lift it, drink, put it back. The cup isn't re-parented to his
@@ -973,16 +1048,19 @@ export class Gardener extends Animal {
     this.animateUmbrella(dt);
     this.animateCup(dt);
     this.animateBucket(dt);
+    this.animateDipper(dt);
   }
 
   // Up when it rains and he's out of doors; furled and put away under the tea house
-  // roof, or while he kneels. The shaft runs from a point above his head down to his
+  // roof, or while he kneels, or while he's using the dipper at the wash basin (a
+  // shower that starts mid-rinse waits until he's done: both his hands are busy). The shaft runs from a point above his head down to his
   // left hand, both converted into his root group's frame (worldToLocal), and the
   // umbrella is turned so its -Y axis points along it (setFromUnitVectors: the
   // rotation that takes one direction onto another).
   animateUmbrella(dt) {
     const um = this.umbrella, tool = this.umbrellaTool;
-    const want = env.rainMix > 0.3 && !this.teaHouse.contains(this.x, this.z) && this.poseName !== 'seiza' ? 1 : 0;
+    const want = env.rainMix > 0.3 && !this.teaHouse.contains(this.x, this.z) && this.poseName !== 'seiza'
+      && !this.dipperHeld ? 1 : 0;
     um.open += (want - um.open) * Math.min(1, dt * 3);
     tool.visible = um.open > 0.02;
     if (!tool.visible) return;
@@ -1039,6 +1117,31 @@ export class Gardener extends Animal {
       g.position.copy(h.cup.home);
       g.rotation.set(0, 0, 0);
       this.held = null;
+    }
+  }
+
+  // The dipper too, between its rest across the basin (w = 0) and his right hand
+  // (w = 1), in the basin's frame. In his hand the handle points ahead of him: turned
+  // to his heading (the handle lies along the dipper's +X, so that's heading - 90°),
+  // pitched (cup end up or down) and rolled about the handle to pour. Euler order
+  // 'YZX' applies the roll first, then the pitch, then the turn, each in the dipper's
+  // own frame. Orientations are blended with slerp, positions with lerp.
+  animateDipper(dt) {
+    const h = this.dipperHeld;
+    if (!h) return;
+    const k = Math.min(1, dt * 4), { dipper, dipperRest, group } = this.tsukubai;
+    h.w += (h.want - h.w) * k;
+    h.pitchNow += (h.pitch - h.pitchNow) * k;
+    h.rollNow += (h.roll - h.rollNow) * k;
+    this.hands.r.getWorldPosition(tmp);
+    group.worldToLocal(tmp);
+    dipper.position.lerpVectors(dipperRest.position, tmp, h.w);
+    dipperE.set(h.rollNow, this.heading - Math.PI / 2, h.pitchNow);
+    dipper.quaternion.slerpQuaternions(dipperRest.quaternion, tmpQ.setFromEuler(dipperE), h.w);
+    if (h.want === 0 && h.w < 0.01) {
+      dipper.position.copy(dipperRest.position);
+      dipper.quaternion.copy(dipperRest.quaternion);
+      this.dipperHeld = null;
     }
   }
 

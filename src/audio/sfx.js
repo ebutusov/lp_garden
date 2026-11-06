@@ -146,6 +146,31 @@ export const SFX = {
     tone({ freq: f, to: f * 1.9, gain: 0.035 * vol, dur: 0.05, attack: 0.002 });
     noiseBurst({ freq: 3000, q: 2, gain: 0.012 * vol, dur: 0.03, attack: 0.002 });
   },
+  // The temple bell: the dull thud of the wooden striker, then a long, deep ring.
+  // A bell's partials aren't whole multiples of its note, as a string's are: that's what
+  // makes it sound like metal rather than a musical instrument. The low ones ring
+  // longest, so the sound darkens as it dies away. Two oscillators a hair apart at the
+  // fundamental "beat" against each other (their sum swells and fades a few times a
+  // second): the slow waver that Japanese bells are known for.
+  bell(vol = 1) {
+    if (!audible() || vol < 0.02) return;
+    noiseBurst({ type: 'lowpass', freq: 380, gain: 0.25 * vol, dur: 0.16, attack: 0.003 });
+    const f = 146;
+    for (const [ratio, gain, dur] of [
+      [0.5, 0.1, 9], [1, 0.12, 8], [1.006, 0.09, 8], [1.19, 0.05, 5.5], [2.0, 0.06, 4.5],
+      [2.74, 0.035, 3], [3.76, 0.025, 2], [5.1, 0.015, 1.2],
+    ]) {
+      tone({ freq: f * ratio, gain: gain * vol, dur, attack: 0.006 });
+    }
+  },
+  trickle(vol = 1, dur = 1.3) { // water poured from the dipper, spattering on the pebbles
+    if (!audible() || vol < 0.02) return;
+    noiseBurst({ freq: 1500, q: 1.2, gain: 0.05 * vol, dur, attack: 0.15 });
+    for (let i = 0; i < 6; i++) {
+      const f = 900 + Math.random() * 1200;
+      tone({ freq: f, to: f * 1.6, gain: 0.015 * vol, dur: 0.05, attack: 0.002, delay: 0.2 + Math.random() * (dur - 0.3) });
+    }
+  },
   yip(vol = 1) { // happy little yip when petted
     if (!audible() || vol < 0.02) return;
     tone({ freq: 700, to: 950, type: 'triangle', gain: 0.1 * vol, dur: 0.09 });
