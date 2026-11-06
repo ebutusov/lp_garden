@@ -20,6 +20,8 @@ export function installDebug(garden, { physics }) {
   const meal = (a) => (a.state === 'bowl' ? {
     bowl: a.meal.bowl.kind, eating: a.meal.eating, legs: a.meal.path.length, d: Math.round(Math.hypot(a.meal.x - a.x, a.meal.z - a.z) * 100) / 100,
   } : null);
+  // Set the dog or a cat wandering toward (x, z), from whatever it was doing.
+  const sendTo = (a, { x, z }) => { a.state = 'wander'; a.target = { x, z }; a.stuck = 0; a.meal = null; };
   window.garden = {
     // What actually got placed (trees that found no room are skipped).
     layout: {
@@ -116,8 +118,10 @@ export function installDebug(garden, { physics }) {
         if (what !== 'hunger') a.thirst = 1;
       }
     },
-    // Put the dog somewhere (for testing how the cats react).
-    moveDog: (x, z) => { dog.x = x; dog.z = z; },
+    // Put the dog, or cat number i, somewhere (for testing how the cats react, or the
+    // steering). With `to` ({ x, z }) it also wanders off toward there.
+    moveDog: (x, z, to) => { dog.x = x; dog.z = z; if (to) sendTo(dog, to); },
+    moveCat: (i, x, z, to) => { const c = cats.list[i]; c.x = x; c.z = z; if (to) sendTo(c, to); },
     dog: () => ({
       x: dog.x, z: dog.z, state: dog.state, sit: dog.sit, speed: dog.speed, leader: dog.leader === gardener ? 'gardener' : dog.leader,
       hunger: dog.hunger, thirst: dog.thirst, meal: meal(dog),

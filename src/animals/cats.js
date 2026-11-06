@@ -5,7 +5,7 @@ import { cameraGroup } from '../core/camera.js';
 import { env } from '../core/state.js';
 import { SFX, distVol } from '../audio/sfx.js';
 import { Feature } from '../world/feature.js';
-import { Animal } from './animal.js';
+import { Animal, feelers } from './animal.js';
 
 // ---- Cats ----
 // Three cats with their own routines: they wander, sit, groom, curl up for a nap, stalk
@@ -19,7 +19,6 @@ const CAT_SPEED = { wander: 1.1, stalk: 0.7, flee: 4.5, pounce: 5 };
 const CAT_HUNGER = 1 / 200, CAT_THIRST = 1 / 130; // per second; at 1 it heads for a bowl
 const CAT_REACH = 0.48;                            // body centre to mouth, crouched over a bowl
 const CAT_DOG_CLEAR = 6;                           // won't go to a bowl with the dog this close to it
-const CAT_FEELERS = [0, 0.45, -0.45, 0.9, -0.9, 1.4, -1.4, 2, -2];
 // marks: flattened blobs on the back [colour, x, y, z, sizeX, sizeZ]; headMarks likewise on the head.
 const CAT_COATS = [
   { // Mike: calico, the classic Japanese lucky cat
@@ -154,15 +153,16 @@ class Cat extends Animal {
 
   // Head toward a goal, swerving around obstacles (same idea as the dog's steering).
   // Turns mostly on the spot first, so it doesn't run the wrong way (e.g. into the dog).
-  // Like the dog it keeps swerving to the side it chose last; trying left and right in
-  // turn, it could flip between them every frame, face-on to a lantern, and never get
-  // round it. `ignore`: a collider it means to walk right up to (a bowl).
+  // Like the dog it keeps swerving to the side it chose last (see feelers() in
+  // animal.js); flipping between sides, it could stay face-on to a lantern and never
+  // get round it. `ignore`: a collider it means to walk right up to (a bowl).
+  // With nowhere to go at all it counts as stuck, as when a step is refused, so
+  // whatever it's doing can give up and pick another way.
   steer(goal, wantSpeed, dt, turnRate = 4, ignore = null) {
     if (goal) {
       const reach = ignore ? clamp(Math.hypot(goal.x - this.x, goal.z - this.z), 0.2, 0.6) : 0.6;
-      const side = this.avoidSide;
-      const free = this.freeHeading(Math.atan2(goal.x - this.x, goal.z - this.z), CAT_FEELERS.map((o) => o * side), reach, ignore);
-      if (!free) wantSpeed = 0;
+      const free = this.freeHeading(Math.atan2(goal.x - this.x, goal.z - this.z), feelers(this.avoidSide), reach, ignore);
+      if (!free) { wantSpeed = 0; this.stuck += dt; }
       else {
         if (free.off !== 0) this.avoidSide = Math.sign(free.off);
         let diff = free.angle - this.heading;

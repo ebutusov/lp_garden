@@ -22,6 +22,22 @@ const blobGeo = new THREE.IcosahedronGeometry(1, 0);
 const TINY_SHADOW_R = 0.06;
 const tmpScale = new THREE.Vector3();
 
+// freeHeading(): how far ahead the first probe of each feeler looks, about one
+// frame's step at a trot.
+const STEP_PROBE = 0.05;
+
+// The swerves the dog and the cats try (radians off the way to their goal), all of
+// them to the side they swerved last (`side`, ±1) before any to the other. Trying left
+// and right in turn instead (0.45, -0.45, 0.9, -0.9, ...), an animal flips sides
+// whenever its own side is blocked a little earlier than the other. Against a long
+// curved wall like the pond's rim that happens every second or so, and it walks in
+// little circles instead of round the obstacle. Keeping to one side is "wall
+// following": with a hand on the wall, you get round anything convex.
+const SWERVES = [0.45, 0.9, 1.4, 2];
+export function feelers(side) {
+  return [0, ...SWERVES.map((o) => o * side), ...SWERVES.map((o) => -o * side)];
+}
+
 export class Animal extends Feature {
   // `radius` > 0 gives the animal a collision circle `height` tall.
   constructor(ctx, { x = 0, z = 0, radius = 0, height = 0, parent } = {}) {
@@ -94,11 +110,16 @@ export class Animal extends Feature {
   // Each feeler checks a point close by as well as the one `reach` ahead (as the
   // Gardener's do): brushing past a tree trunk, the far point can be clear while the
   // very next step isn't, and the animal would keep picking a heading it can't take.
+  // And one a single step ahead (STEP_PROBE): skirting the pond's rim, a heading that
+  // just grazes the circle can dip into it for the first few centimetres and be out
+  // again by the near point, so every step would be refused while every feeler said
+  // the way was clear.
   freeHeading(desired, offsets, reach, ignore = null) {
     const near = Math.min(0.2, reach);
     for (const off of offsets) {
       const angle = desired + off, sx = Math.sin(angle), cz = Math.cos(angle);
-      if (!this.blocked(this.x + sx * near, this.z + cz * near, ignore) &&
+      if (!this.blocked(this.x + sx * STEP_PROBE, this.z + cz * STEP_PROBE, ignore) &&
+          !this.blocked(this.x + sx * near, this.z + cz * near, ignore) &&
           !this.blocked(this.x + sx * reach, this.z + cz * reach, ignore)) return { angle, off };
     }
     return null;
