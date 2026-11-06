@@ -32,6 +32,28 @@ export function bridgeDeckTop(x, z) {
   return Math.sin(t * Math.PI) * BRIDGE_RISE + BRIDGE_DECK / 2;
 }
 
+// The pond's no-go circle for animals, and how far its edge is from the water.
+const POND_KEEP_OUT = POND_R + 1.2;
+
+// Is (px, pz) in the gap between a circle (centre at the origin, radius R) and a
+// corner point (cx, cz) outside it, on the near side? That gap is the triangle
+// between the corner and the two points where lines from it just touch the circle
+// (the tangent points, at an angle acos(R / d) either side of the corner's direction,
+// d being its distance). Add those triangles and a shape with a box poking out of a
+// circle becomes its "convex hull": the shape a rubber band stretched round it would
+// make, with no inside corners.
+function inTangentWedge(px, pz, R, cx, cz) {
+  const d = Math.hypot(cx, cz);
+  if (d <= R) return false;
+  const a = Math.acos(R / d), b = Math.atan2(cz, cx);
+  const t1x = R * Math.cos(b + a), t1z = R * Math.sin(b + a);
+  const t2x = R * Math.cos(b - a), t2z = R * Math.sin(b - a);
+  // Inside a triangle: on the same side of all three edges (the cross products agree in sign).
+  const side = (ax, az, bx, bz) => (bx - ax) * (pz - az) - (bz - az) * (px - ax);
+  const s1 = side(cx, cz, t1x, t1z), s2 = side(t1x, t1z, t2x, t2z), s3 = side(t2x, t2z, cx, cz);
+  return (s1 >= 0 && s2 >= 0 && s3 >= 0) || (s1 <= 0 && s2 <= 0 && s3 <= 0);
+}
+
 export class Physics {
   constructor() {
     this.solids = [];     // circles {x, z, r, h} and boxes {minX, maxX, minZ, maxZ, h}; block below height h
@@ -102,11 +124,27 @@ export class Physics {
   // `house`: the tea house is allowed, for an animal sheltering from the rain. Its
   // walls are solids of their own, so it still has to come in through the door.
   groundBlocked(x, z, r, self, other = null, house = false) {
-    if (Math.hypot(x, z - POND_Z) < POND_R + 1.2) return true;
-    if (Math.abs(x) < BRIDGE_WIDTH / 2 + r && Math.abs(z - POND_Z) < BRIDGE_SPAN / 2 + r) return true; // bridge, with room for the body
+    if (this.pondBlocked(x, z, r)) return true;
     if (!house && this.nearTeaHouse(x, z)) return true;
     if (Math.hypot(x, z) > FENCE_R - 2) return true;
     return this.hitsSolid(x, z, r, self, other);
+  }
+
+  // The pond and the bridge across it, as one obstacle for an animal of radius r: a
+  // circle round the water, the bridge's box (padded by the body) poking out of it at
+  // each bank, and the wedges that fill the inside corners where the two meet.
+  // Without the wedges each bank has two right-angled nooks between the rim and the
+  // bridge. Steering by feelers is greedy: an animal that walks into one faces a wall
+  // whichever way it looks toward its goal, and turns back and forth in there. With
+  // them the obstacle is convex, and keeping to one side always leads round it.
+  pondBlocked(x, z, r) {
+    const dz = z - POND_Z, dist = Math.hypot(x, dz);
+    if (dist < POND_KEEP_OUT) return true;
+    const w = BRIDGE_WIDTH / 2 + r, l = BRIDGE_SPAN / 2 + r;
+    if (Math.abs(x) < w && Math.abs(dz) < l) return true; // the bridge, with room for the body
+    if (dist >= Math.hypot(w, l)) return false;            // the wedges are all nearer than the box's corners
+    const end = Math.sign(dz) * l;                          // the bank this side of the pond
+    return inTangentWedge(x, dz, POND_KEEP_OUT, w, end) || inTangentWedge(x, dz, POND_KEEP_OUT, -w, end);
   }
 
   // The box round the tea house (with its doorstep) that animals keep out of.

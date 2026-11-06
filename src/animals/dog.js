@@ -5,7 +5,7 @@ import { cameraGroup } from '../core/camera.js';
 import { player } from '../core/state.js';
 import { PLAYER_HEIGHT } from '../core/physics.js';
 import { SFX, distVol } from '../audio/sfx.js';
-import { Animal } from './animal.js';
+import { Animal, feelers } from './animal.js';
 
 // ---- A friendly Shiba Inu ----
 // Wanders between random spots, stops to sit or sniff, greets and follows the player,
@@ -270,13 +270,16 @@ export class Dog extends Animal {
 
     if (goal) {
       // Head for the goal, swerving around anything in the way, and keep swerving to
-      // the same side as last time so it doesn't dither left and right.
+      // the same side as last time so it doesn't dither left and right (feelers() in
+      // animal.js).
       const desired = Math.atan2(goal.x - this.x, goal.z - this.z);
-      const s = this.avoidSide;
       const reach = ignore ? clamp(Math.hypot(goal.x - this.x, goal.z - this.z), 0.3, 0.9) : 0.9;
-      const free = this.freeHeading(desired, [0, s * 0.45, -s * 0.45, s * 0.9, -s * 0.9, s * 1.4, -s * 1.4, s * 2, -s * 2], reach, ignore);
+      const free = this.freeHeading(desired, feelers(this.avoidSide), reach, ignore);
       if (!free) {
-        wantSpeed = 0; // nowhere to go (e.g. the player is in the pond): wait
+        // Nowhere to go (e.g. the player is in the pond): wait. That counts as stuck,
+        // as a refused step does, or a wander into a dead end would never give up.
+        wantSpeed = 0;
+        this.stuck += dt;
         if (this.state === 'follow') sitting = true;
       } else {
         if (free.off !== 0) this.avoidSide = Math.sign(free.off);
