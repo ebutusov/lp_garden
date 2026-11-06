@@ -5,6 +5,8 @@ import { Feature } from './feature.js';
 // ---- Stepping stones (tobi-ishi): torii → bridge, and tea house → pond ----
 // The main path zigzags along x = 0 from z = `from` to z = `to`; `teaPath` lists the
 // stones in front of the tea house.
+const STONE_H = 0.25;
+
 export class SteppingStones extends Feature {
   constructor(ctx, { from, to, teaPath }) {
     super(ctx);
@@ -19,10 +21,17 @@ export class SteppingStones extends Feature {
 
   addStone(x, z) {
     const { rand } = this.ctx;
+    const top = 0.7 + rand() * 0.4;
     // A mesh can both cast shadows onto others and receive them from others.
-    const stone = this.mesh(new THREE.CylinderGeometry(0.7 + rand() * 0.4, 0.9, 0.25, 7), M.stone,
+    const stone = this.mesh(new THREE.CylinderGeometry(top, 0.9, STONE_H, 7), M.stone,
       x, 0.12, z, { cast: true, receive: true });
     stone.rotation.y = rand() * Math.PI;
+    // Something to stand on: a disc at the stone's top, for everyone who asks
+    // physics.surfaceHeightAt() (the player, the animals, the Gardener). The top is a
+    // heptagon, turned at random, so the disc is its inscribed circle (radius times
+    // cos(π/7), the distance to the middle of a side): it never reaches past an edge,
+    // whichever way the stone is turned. Walking over the corners you're on the grass.
+    this.ctx.physics.addPad(x, z, top * Math.cos(Math.PI / 7), 0.12 + STONE_H / 2);
   }
 
   // The stones as built (mergeStatic adds a merged copy of them beside them).

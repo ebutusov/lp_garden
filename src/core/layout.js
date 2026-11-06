@@ -18,6 +18,11 @@ export const FENCE_H = 1.8;
 export const TEA = { x: -30, z: 0 };                  // tea house, facing east toward the pond
 export const TEA_PATH = [[-24.4, 0.4], [-22.6, -0.2], [-20.8, 0.5], [-19, 0]]; // its stepping stones
 export const BOWLS = { x: -30, z: 5.3 };            // the pets' bowls, in a row along its south wall
+// Beside the tea path: the stone wash basin, north of the stones (kept east of the
+// doorway, where the animals come out of the house), and the little temple bell in its
+// frame a few steps further north.
+export const TSUKUBAI = { x: -20.6, z: -2.6 };
+export const BELL = { x: -17.4, z: -4.9 };
 export const ZEN = { x: 28, z: 2, w: 16, d: 12 };     // raked gravel garden
 export const SHISHI_ANGLE = -1.05;                    // bamboo water spout on the pond rim
 export const SHISHI = {

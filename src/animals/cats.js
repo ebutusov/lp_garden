@@ -352,7 +352,7 @@ class Cat extends Animal {
     const swing = Math.sin(this.phase) * 0.6 * moving * (1 - sit) * (1 - lie);
     const jump = this.state === 'pounce' ? Math.sin(Math.min(1, this.pounceT / 0.45) * Math.PI) * 0.45 : 0;
     const hipY = 0.34 + (0.15 - 0.34) * sit + (0.13 - 0.34) * lie + (0.24 - 0.34) * crouch;
-    this.group.position.set(this.x, this.groundAt(this.x, this.z) + jump, this.z);
+    this.group.position.set(this.x, this.footY(dt) + jump, this.z);
     this.group.rotation.y = this.heading;
     this.torso.position.y = hipY + Math.abs(Math.sin(this.phase)) * 0.015 * moving;
     this.torso.rotation.x = -0.6 * sit + 0.1 * crouch - (jump ? 0.25 : 0);

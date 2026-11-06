@@ -14,7 +14,7 @@ import { setHelpVisible } from './ui/help.js';
 //   garden.setView({ x: 0, y: 12, z: 10, yaw: 0, pitch: -0.8, fly: true })
 // main.js installs them once the garden is built, handing over what they inspect.
 export function installDebug(garden, { physics }) {
-  const { trees, lanterns, pond, flowers, steppingStones, koi, feeding, dog, birds, cats, gardener, butterflies, zenGarden, interaction, grass, bowls, stream, mountains, forest, clouds } = garden;
+  const { trees, lanterns, pond, flowers, steppingStones, koi, feeding, dog, birds, cats, gardener, butterflies, zenGarden, interaction, grass, bowls, stream, tsukubai, bell, mountains, forest, clouds } = garden;
   const { solids, mounds } = physics;
   // Where an animal is with its meal: which bowl, whether it's got there, how far off it is.
   const meal = (a) => (a.state === 'bowl' ? {
@@ -91,17 +91,34 @@ export function installDebug(garden, { physics }) {
       return pet.animal.pet() ? 'cat' : 'cat:aloof';
     },
     cats: () => cats.list.map((c) => ({
-      name: c.name, state: c.state, x: c.x, z: c.z, speed: c.speed, hunger: c.hunger, thirst: c.thirst, meal: meal(c),
+      name: c.name, state: c.state, x: c.x, y: c.feetY, z: c.z, speed: c.speed, hunger: c.hunger, thirst: c.thirst, meal: meal(c),
     })),
     // The Gardener: what he's doing and where. gardenerDo('rake') makes him start an
-    // activity ('admire', 'view', 'tea', 'feed', 'rake', 'pet', 'fill'); greet() is the E key.
+    // activity ('admire', 'view', 'tea', 'feed', 'rake', 'pet', 'fill', or 'rinse': just
+    // the hand-washing at the basin he does on his way to tea); greet() is the E key.
     gardener: () => ({
-      activity: gardener.activity, pose: gardener.poseName, x: gardener.x, z: gardener.z, heading: gardener.heading,
+      activity: gardener.activity, pose: gardener.poseName, x: gardener.x, y: gardener.y, z: gardener.z, heading: gardener.heading,
       speed: gardener.speed, rake: gardener.rakeHeld ? gardener.rakeMode : 'down', cup: !!gardener.held,
-      bucket: !!gardener.bucketHeld,
+      bucket: !!gardener.bucketHeld, dipper: !!gardener.dipperHeld,
     }),
     gardenerDo: (name) => gardener.start(name),
     greet: () => gardener.greet(),
+    // The temple bell: the striker's state ('still', 'draw', 'swing', 'rebound'), its
+    // angle, how many times it has rung, and whether the player is in reach to ring it.
+    // ringBell() rings it as the E key does (false if the striker is still swinging).
+    bell: () => {
+      const p = cameraGroup.position;
+      return {
+        state: bell.state, striker: Math.round(bell.strikerPivot.rotation.x * 100) / 100, rings: bell.rings,
+        inReach: bell.inReach(p.x, p.z),
+      };
+    },
+    ringBell: () => bell.ring(),
+    // The wash basin's dipper: where it is (world), and whether it's in the Gardener's hand.
+    tsukubai: () => {
+      const d = tsukubai.dipper.getWorldPosition(new THREE.Vector3());
+      return { dipper: d.toArray().map((v) => Math.round(v * 100) / 100), held: !!gardener.dipperHeld, stand: tsukubai.standSpot() };
+    },
     // Footprints in the gravel since it was last raked.
     zenPrints: () => zenGarden.prints,
     // The bowls: how full each is (0…1) and who's eating or drinking there.
@@ -123,7 +140,7 @@ export function installDebug(garden, { physics }) {
     moveDog: (x, z, to) => { dog.x = x; dog.z = z; if (to) sendTo(dog, to); },
     moveCat: (i, x, z, to) => { const c = cats.list[i]; c.x = x; c.z = z; if (to) sendTo(c, to); },
     dog: () => ({
-      x: dog.x, z: dog.z, state: dog.state, sit: dog.sit, speed: dog.speed, leader: dog.leader === gardener ? 'gardener' : dog.leader,
+      x: dog.x, y: dog.feetY, z: dog.z, state: dog.state, sit: dog.sit, speed: dog.speed, leader: dog.leader === gardener ? 'gardener' : dog.leader,
       hunger: dog.hunger, thirst: dog.thirst, meal: meal(dog),
     }),
     birds: () => birds.list.map((b) => {
@@ -175,9 +192,10 @@ export function installDebug(garden, { physics }) {
       const r = (v) => Math.round(v * 1000) / 1000;
       // The meshes as built: mergeStatic() adds merged copies alongside them (and hides them).
       const built = (o) => o.children.filter((c) => !c.userData.merged);
-      // The animals' colliders move, and the bowls' and the stream's were added after
-      // the layout was fixed; none of them is part of what rand() placed.
-      const animalSolids = new Set([dog.solid, gardener.solid, ...cats.list.map((c) => c.solid), ...bowls.solids, ...stream.solids]);
+      // The animals' colliders move, and the bowls', the stream's, the wash basin's and
+      // the bell's were added after the layout was fixed; none of them is part of what rand() placed.
+      const animalSolids = new Set([dog.solid, gardener.solid, ...cats.list.map((c) => c.solid), ...bowls.solids, ...stream.solids,
+        ...tsukubai.solids, ...bell.solids]);
       const data = {
         mounds: mounds.map((m) => [r(m.x), r(m.z), r(m.r)]),
         solids: solids.filter((s) => !animalSolids.has(s)).map((s) => (s.r !== undefined
