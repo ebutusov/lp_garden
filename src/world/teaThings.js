@@ -73,6 +73,11 @@ export class TeaThings extends Feature {
     this.addSteam(kettle);
   }
 
+  // The cups get picked up (see gardener.js); the rest stays on the table and brazier.
+  mergeStatic() {
+    super.mergeStatic({ skip: this.cups.map((c) => c.group) });
+  }
+
   // The cup nearest the local point (x, z), e.g. a seat.
   nearestCup(x, z) {
     const d = (c) => Math.hypot(c.home.x - x, c.home.z - z);

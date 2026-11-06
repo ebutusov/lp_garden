@@ -55,6 +55,14 @@ export class Clouds extends Feature {
     }
   }
 
+  // Each cloud drifts and swells as a whole (its group moves and scales), so its puffs
+  // are merged inside it, one mesh per cloud. The three still cap clouds are merged too.
+  mergeStatic() {
+    const clouds = [...this.skyClouds, ...this.fujiClouds];
+    for (const cloud of clouds) super.mergeStatic({ root: cloud });
+    super.mergeStatic({ skip: clouds });
+  }
+
   makeCloud(size, stretch, material) {
     const g = new THREE.Group();
     const n = 5 + Math.floor(Math.random() * 4);

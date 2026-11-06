@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // ---- Feature: the base class of every garden feature ----
 // A class bundles some data (fields on `this`) with the functions that work on it
@@ -29,12 +30,17 @@ const tmpV = new THREE.Vector3();
 const downRay = new THREE.Raycaster();
 const DOWN = new THREE.Vector3(0, -1, 0);
 const normalMat = new THREE.Matrix3();
+// For mergeStatic(): a mesh's transform relative to the group it's merged into.
+const toRoot = new THREE.Matrix4(), relative = new THREE.Matrix4();
 
 export class Feature {
   // A subclass's constructor must call super(...) before it touches `this`.
   constructor(ctx, { x = 0, z = 0, parent = ctx.scene } = {}) {
     this.ctx = ctx;
     this.group = new THREE.Group();
+    // Marks where this feature's part of the scene graph begins, so mergeStatic() can
+    // tell its own meshes from a feature nested inside it (the tea things in the house).
+    this.group.userData.feature = this;
     this.group.position.set(x, 0, z);
     parent.add(this.group);
   }
@@ -97,5 +103,78 @@ export class Feature {
     const normal = hit.face.normal.clone().applyMatrix3(normalMat.getNormalMatrix(mesh.matrixWorld)).normalize();
     if (normal.y < minUp) return null;
     return { point: hit.point.clone(), normal, kind };
+  }
+
+  // ---- Merging static meshes: fewer draw calls ----
+  // Every visible mesh costs the CPU a "draw call" per render pass: three binds its
+  // shader, uploads its matrices and material settings, and asks the GPU to draw it.
+  // The garden is made of hundreds of small meshes, and that per-call overhead, not the
+  // GPU's drawing, is what most of a frame costs here. Meshes that never move and share
+  // a material can be fused into one: their geometries are copied into one buffer, each
+  // copy moved to where its mesh stood (the transform is "baked" into the vertices).
+  //
+  // What it trades away: the merged mesh moves as one, so nothing in it can be animated
+  // on its own, and it's culled as one (when any part is in view, all of it is drawn).
+  // So it's done per feature, never across the garden: one mesh per material for the
+  // bridge, another for the lanterns, and so on. Leave out anything that moves, turns,
+  // scales or is shown and hidden later: pass it (or a group holding it) in `skip`.
+  //
+  // The originals aren't removed, only hidden (three skips invisible meshes when it
+  // renders, so they cost nothing to draw). Code that looks at them still works:
+  // butterflies raycast onto their landing spots, perches hang off their groups, and
+  // the debug fingerprint reads where they were placed. Raycasting ignores `visible`.
+  //
+  // `root`: the group whose meshes are merged, and where the merged meshes go (its
+  // own transform, and any animation of it, carries on applying to them).
+  // `into`: features nested inside `root` whose meshes may be merged too (a feature's
+  // group is otherwise a boundary: the tea things in the house aren't the house's).
+  // Called once, after the whole garden is built (garden.js).
+  mergeStatic({ root = this.group, skip = [], into = [] } = {}) {
+    const skipped = new Set(skip);
+    const open = new Set([this.group, ...into.map((f) => f.group)]);
+    root.updateWorldMatrix(true, true);
+    toRoot.copy(root.matrixWorld).invert();
+    const batches = new Map();
+    const visit = (o) => {
+      if (skipped.has(o) || !o.visible) return;
+      if (o !== root && o.userData.feature && !open.has(o)) return; // another feature
+      if (o.userData.merged) return; // merged already
+      for (const child of o.children) visit(child);
+      if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || o.children.length) return;
+      const material = o.material, geo = o.geometry;
+      // Transparent meshes are sorted back to front one by one before drawing, so a
+      // merged one would blend in the wrong order. Morph targets animate per mesh.
+      if (Array.isArray(material) || material.transparent || Object.keys(geo.morphAttributes).length) return;
+      relative.multiplyMatrices(toRoot, o.matrixWorld);
+      // A mirroring transform (negative scale) turns triangles inside out: three
+      // corrects that per mesh when drawing, but not once it's baked into vertices.
+      if (relative.determinant() < 0) return;
+      // Only like with like: same material, same shadow and layer settings, and
+      // geometries with the same vertex attributes (mergeGeometries needs that).
+      const attrs = Object.entries(geo.attributes).map(([name, a]) => `${name}:${a.itemSize}:${a.array.constructor.name}`).sort();
+      const key = [material.id, o.castShadow, o.receiveShadow, o.layers.mask, o.renderOrder,
+        o.frustumCulled, geo.index !== null, ...attrs].join('|');
+      if (!batches.has(key)) batches.set(key, { meshes: [], geos: [] });
+      const batch = batches.get(key);
+      batch.meshes.push(o);
+      batch.geos.push(geo.clone().applyMatrix4(relative)); // moves the normals correctly too
+    };
+    visit(root);
+    for (const { meshes, geos } of batches.values()) {
+      if (meshes.length < 2) continue; // nothing to gain
+      const merged = mergeGeometries(geos);
+      if (!merged) continue; // mergeGeometries logs why
+      const first = meshes[0];
+      const mesh = new THREE.Mesh(merged, first.material);
+      mesh.castShadow = first.castShadow;
+      mesh.receiveShadow = first.receiveShadow;
+      mesh.layers.mask = first.layers.mask;
+      mesh.renderOrder = first.renderOrder;
+      mesh.frustumCulled = first.frustumCulled;
+      mesh.userData.merged = true;
+      mesh.userData.sources = meshes; // the hidden originals, for debugging
+      root.add(mesh);
+      for (const m of meshes) m.visible = false;
+    }
   }
 }

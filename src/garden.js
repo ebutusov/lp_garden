@@ -76,6 +76,7 @@ export function buildGarden(ctx, { anisotropy = 1, grassDensity = 1 } = {}) {
   const rainRipples = new Ripples(ctx, { pond, count: 64 });
   const feeding = new Feeding(ctx, { pond, ripples });
   const koi = new KoiSchool(ctx, { pond, ripples, feeding });
+  pond.hideFromReflection(koi.group); // they swim under the surface
   const bridge = new Bridge(ctx, { z: POND_Z });
   const torii = new Torii(ctx, { z: TORII_Z });
   const steppingStones = new SteppingStones(ctx, { from: 31, to: POND_Z + POND_R + 3, teaPath: TEA_PATH });
@@ -124,6 +125,20 @@ export function buildGarden(ctx, { anisotropy = 1, grassDensity = 1 } = {}) {
   // The dog, the cats and the Gardener part the grass as they walk through it.
   grass.pushers = [dog, ...cats.list, gardener];
   const interaction = new Interaction({ dog, cats, feeding, gardener });
+
+  // Fuse each static feature's meshes into one per material (Feature.mergeStatic), to
+  // cut the draw calls. Last, so the perches and landing spots above were worked out
+  // from the separate meshes, and before the first frame. Features with moving parts
+  // say what to leave out in their own mergeStatic(). Not merged: the pond (its koi and
+  // ripples live in its group), the bowls (the bucket and the food move or come and
+  // go), the fence (already instanced) and the animals.
+  for (const f of [ground, clouds, trees, lanterns, bridge, torii, steppingStones, teaHouse, teaThings, zenGarden, shishi,
+    rocks, flowers, stream]) {
+    f.mergeStatic();
+  }
+  // The animals move, so they can't be merged, but their tiniest parts can stop casting
+  // shadows, which saves draw calls in the shadow pass (Animal.dropTinyShadows).
+  for (const a of [dog, ...cats.list, gardener]) a.dropTinyShadows();
 
   return {
     sky, ground, fuji, clouds, mountains, forest, trees, lanterns, pond, ripples, rainRipples, bridge, torii, steppingStones,

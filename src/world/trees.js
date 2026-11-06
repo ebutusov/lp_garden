@@ -44,6 +44,9 @@ class Tree extends Feature {
   // Bird perches. Perches are points in a parent's LOCAL coordinates, so a bird sitting
   // in the crown sways along with it. Each subclass knows where its own top is.
   perches() { return []; }
+
+  // The crown's blobs or cones as built (mergeStatic adds a merged copy beside them).
+  get parts() { return this.crown.children.filter((c) => !c.userData.merged); }
 }
 
 class PineTree extends Tree {
@@ -66,7 +69,7 @@ class PineTree extends Tree {
 
   // The tip of the top cone.
   perches() {
-    const top = this.crown.children.reduce((a, b) => (a.position.y > b.position.y ? a : b));
+    const top = this.parts.reduce((a, b) => (a.position.y > b.position.y ? a : b));
     const y = top.position.y + top.geometry.parameters.height / 2 - 0.05;
     return [{ parent: this.crown, local: new THREE.Vector3(0, y, 0), kind: 'tree' }];
   }
@@ -95,7 +98,7 @@ class BlobTree extends Tree {
   // The tops of the two highest blobs.
   perches() {
     const top = (c) => c.position.y + c.geometry.parameters.radius * 0.8;
-    return [...this.crown.children].sort((a, b) => top(b) - top(a)).slice(0, 2)
+    return [...this.parts].sort((a, b) => top(b) - top(a)).slice(0, 2)
       .map((c) => ({ parent: this.crown, local: new THREE.Vector3(c.position.x, top(c), c.position.z), kind: 'tree' }));
   }
 }
@@ -146,6 +149,13 @@ export class Trees extends Feature {
 
   perches() {
     return this.list.flatMap((tree) => tree.perches());
+  }
+
+  // Each crown sways on its own, so its blobs or cones are merged inside it (a mesh
+  // per colour). The trunks stand still: those of every tree are merged together.
+  mergeStatic() {
+    for (const tree of this.list) tree.mergeStatic({ root: tree.crown });
+    super.mergeStatic({ skip: this.list.map((tree) => tree.crown), into: this.list });
   }
 
   update(dt, t) {

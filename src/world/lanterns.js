@@ -63,4 +63,10 @@ export class Lanterns extends Feature {
   update(dt, t) {
     for (const l of this.list) l.flicker(t, this.brightness);
   }
+
+  // Only their lights flicker; the stone and paper never move, so every lantern's
+  // meshes are merged together, one mesh per material.
+  mergeStatic() {
+    super.mergeStatic({ into: this.list });
+  }
 }

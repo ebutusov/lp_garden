@@ -25,15 +25,18 @@ export class SteppingStones extends Feature {
     stone.rotation.y = rand() * Math.PI;
   }
 
+  // The stones as built (mergeStatic adds a merged copy of them beside them).
+  get stones() { return this.group.children.filter((o) => !o.userData.merged); }
+
   // Butterflies sun themselves on the stones' flat tops.
   landings() {
-    return this.group.children.map((stone) => this.landingOn(stone, 0, 0, 'stone')).filter(Boolean);
+    return this.stones.map((stone) => this.landingOn(stone, 0, 0, 'stone')).filter(Boolean);
   }
 
   // Each stone's footprint { x, z, r } (the group sits at the origin, so these are world
   // coordinates). The grass keeps clear of them.
   footprints() {
-    return this.group.children.map((o) => ({
+    return this.stones.map((o) => ({
       x: o.position.x, z: o.position.z, r: Math.max(o.geometry.parameters.radiusTop, o.geometry.parameters.radiusBottom),
     }));
   }

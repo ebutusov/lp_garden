@@ -136,7 +136,7 @@ export function makeWaterMaterial(radius) {
 // ---- Planar reflection: the "virtual camera" trick ----
 // A flat mirror shows the world as seen by a camera reflected through the mirror's
 // plane: the same distance below the water as the real camera is above it, looking up
-// at the mirrored angle. So, every frame, just before the water is drawn:
+// at the mirrored angle. So, every frame, before the scene is drawn:
 //  1. place a virtual camera at the real camera's mirror image;
 //  2. render the scene from it into an off-screen texture (a render target), with the
 //     water itself hidden and everything below the surface clipped away;
@@ -145,28 +145,52 @@ export function makeWaterMaterial(radius) {
 // This is what three's Reflector addon does; it's spelt out here to show the steps,
 // and so the result can feed a lit, wavy material instead of a plain mirror.
 // It costs a second render of the scene, at half resolution, and only while the water
-// is on screen: three calls onBeforeRender only for objects that will be drawn.
+// is on screen (a frustum test, below).
+//
+// Why a separate render before the main one, rather than from the water's
+// onBeforeRender in the middle of it (as Reflector does)? A render started inside
+// another gets its own copy of the renderer's lighting state, with a different version
+// number. Each material remembers the version its shader was set up for, so every lit
+// material drawn in both renders would look out of date twice a frame, and three would
+// work out its shader settings again (getProgram) each time: about a millisecond of CPU
+// per frame here. Two renders one after the other share the same lighting state.
 const UP = new THREE.Vector3(0, 1, 0);
 // Render-target pixels per screen pixel. Half is plenty under the waves' distortion.
 const MIRROR_SCALE = 0.5;
+// Points round the rim used to find the pond's outline in the mirror image.
+const RIM_POINTS = 24;
+// Margin round that outline, as a share of the full image: the waves nudge each
+// lookup by up to about 0.35 × 0.09 (the steepest facet tilt) ≈ 3% of the image.
+const CROP_PAD = 0.04;
 
-export function addMirror(mesh, uniforms) {
+// `radius`: the pond's, the round part of the water mesh that's actually seen.
+// Returns render(renderer, scene, camera), to be called once a frame just before the
+// scene itself is drawn.
+export function addMirror(mesh, uniforms, radius) {
   const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
   uniforms.uMirror.value = target.texture;
   const virtualCamera = new THREE.PerspectiveCamera();
   const planePos = new THREE.Vector3(), camPos = new THREE.Vector3();
   const lookAt = new THREE.Vector3(), rotation = new THREE.Matrix4();
   const plane = new THREE.Plane(), clipPlane = new THREE.Vector4(), q = new THREE.Vector4();
-  const size = new THREE.Vector2();
-  // Maps clip space (-1…1) to texture space (0…1).
-  const toTexture = new THREE.Matrix4().set(
-    0.5, 0, 0, 0.5,
-    0, 0.5, 0, 0.5,
-    0, 0, 0.5, 0.5,
-    0, 0, 0, 1,
-  );
+  const size = new THREE.Vector2(), rim = new THREE.Vector4();
+  const frustum = new THREE.Frustum(), viewProjection = new THREE.Matrix4();
+  // Maps clip space (-1…1) to texture space (0…1), squeezed into the corner of the
+  // texture the cropped image is drawn in (set each frame).
+  const toTexture = new THREE.Matrix4();
 
-  mesh.onBeforeRender = (renderer, scene, camera) => {
+  return (renderer, scene, camera) => {
+    // Make sure the camera's and the water's world matrices (and their parents') hold
+    // this frame's positions. main.js has already updated the whole scene's; this only
+    // walks up two short chains, and keeps the mirror right if called on its own.
+    camera.updateWorldMatrix(true, false);
+    mesh.updateWorldMatrix(true, false);
+    // Skip it all when the water is off screen. The view frustum is the camera's
+    // visible volume, six planes built from its projection and view matrices.
+    viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    frustum.setFromProjectionMatrix(viewProjection);
+    if (!frustum.intersectsObject(mesh)) return;
+
     // Keep the texture in step with the screen size.
     renderer.getDrawingBufferSize(size).multiplyScalar(MIRROR_SCALE).floor();
     if (target.width !== size.x || target.height !== size.y) target.setSize(size.x, size.y);
@@ -183,19 +207,64 @@ export function addMirror(mesh, uniforms) {
     lookAt.y = 2 * planePos.y - lookAt.y;
     virtualCamera.up.set(0, 1, 0).applyMatrix4(rotation).reflect(UP);
     virtualCamera.lookAt(lookAt);
-    virtualCamera.far = camera.far;
     virtualCamera.updateMatrixWorld();
-    virtualCamera.projectionMatrix.copy(camera.projectionMatrix);
+    // Same lens as the real camera, to begin with.
+    virtualCamera.fov = camera.fov;
+    virtualCamera.aspect = camera.aspect;
+    virtualCamera.near = camera.near;
+    virtualCamera.far = camera.far;
+    virtualCamera.zoom = camera.zoom;
+    virtualCamera.clearViewOffset(); // also rebuilds projectionMatrix from the lens
+
+    // 1b. Crop to the pond. Only the part of the mirror image that lands on the water
+    //     is ever looked up, so the virtual camera renders just a window round it.
+    //     Project the rim into the virtual camera's image and take the rectangle
+    //     round it, in pixels of the full image. setViewOffset (meant for splitting
+    //     one view across several monitors) then narrows the projection to that window,
+    //     and three's ordinary frustum culling skips everything outside it: low things
+    //     whose reflection would fall past the far rim, whatever is off to the sides.
+    //     The window keeps the full image's pixel density, in the texture's corner.
+    const W = size.x, H = size.y;
+    viewProjection.multiplyMatrices(virtualCamera.projectionMatrix, virtualCamera.matrixWorldInverse);
+    let x0 = 1, x1 = -1, y0 = 1, y1 = -1; // the rim's extent, in clip space (-1…1)
+    for (let i = 0; i < RIM_POINTS; i++) {
+      const a = (i / RIM_POINTS) * Math.PI * 2;
+      rim.set(planePos.x + Math.cos(a) * radius, planePos.y, planePos.z + Math.sin(a) * radius, 1)
+        .applyMatrix4(viewProjection);
+      // A point behind the camera (w ≤ 0) doesn't project to a meaningful spot:
+      // the pond wraps round the viewer, so keep the whole image.
+      if (rim.w <= 0) { x0 = y0 = -1; x1 = y1 = 1; break; }
+      x0 = Math.min(x0, rim.x / rim.w); x1 = Math.max(x1, rim.x / rim.w);
+      y0 = Math.min(y0, rim.y / rim.w); y1 = Math.max(y1, rim.y / rim.w);
+    }
+    const left = Math.max(0, Math.floor(((x0 + 1) / 2 - CROP_PAD) * W));
+    const right = Math.min(W, Math.ceil(((x1 + 1) / 2 + CROP_PAD) * W));
+    const bottom = Math.max(0, Math.floor(((y0 + 1) / 2 - CROP_PAD) * H));
+    const top = Math.min(H, Math.ceil(((y1 + 1) / 2 + CROP_PAD) * H));
+    const w = right - left, h = top - bottom;
+    if (w <= 0 || h <= 0) return; // no water in the mirror's view
+    virtualCamera.setViewOffset(W, H, left, H - top, w, h); // y counts from the top
+    target.viewport.set(0, 0, w, h);
+    toTexture.set(
+      0.5 * w / W, 0, 0, 0.5 * w / W,
+      0, 0.5 * h / H, 0, 0.5 * h / H,
+      0, 0, 0.5, 0.5,
+      0, 0, 0, 1,
+    );
 
     // Where each water vertex lands in the texture: through the virtual camera's
-    // view and projection, then into 0…1. The shader multiplies its vertices by this.
+    // view and (cropped) projection, then into the window's corner of 0…1. The shader
+    // multiplies its vertices by this. As the window keeps the full image's pixel
+    // density, the waves' nudges cover the same distance as without the crop.
     uniforms.uMirrorMatrix.value.copy(toTexture)
       .multiply(virtualCamera.projectionMatrix)
       .multiply(virtualCamera.matrixWorldInverse)
       .multiply(mesh.matrixWorld);
 
-    // 2a. Oblique near plane. The virtual camera sits under the water, so the koi and
-    //     the pond floor are right in front of it. Tilting its near clipping plane to
+    // 2a. Oblique near plane. The virtual camera sits under the water, so whatever is
+    //     below the surface is right in front of it. (The koi, the floor and the inner
+    //     wall aren't drawn at all, as they're on UNDERWATER_LAYER, but the rim's lower
+    //     half and the stream bed still reach under.) Tilting its near clipping plane to
     //     lie along the water surface clips away everything below the surface for free
     //     (Lengyel's technique: rewrite the projection matrix's third row).
     plane.setFromNormalAndCoplanarPoint(UP, planePos).applyMatrix4(virtualCamera.matrixWorldInverse);
@@ -213,13 +282,16 @@ export function addMirror(mesh, uniforms) {
     p[10] = clipPlane.z + 1 - 0.003; // a small bias keeps the waterline itself out
     p[14] = clipPlane.w;
 
-    // 2b. Render into the texture. This happens in the middle of the main render, so
-    //     everything changed here is put back afterwards. Shadows are reused, not redrawn.
+    // 2b. Render into the texture, putting back everything changed here. The shadow map
+    //     isn't redrawn: the main render does that, so the reflection uses last frame's,
+    //     which nobody can tell in a rippling reflection.
     mesh.visible = false; // the water mustn't reflect itself
     const prevTarget = renderer.getRenderTarget();
     const prevShadowUpdate = renderer.shadowMap.autoUpdate;
     renderer.shadowMap.autoUpdate = false;
     renderer.setRenderTarget(target);
+    // The last pass of the previous frame may have left depth writes off, and clearing
+    // the depth buffer only works with them on.
     renderer.state.buffers.depth.setMask(true);
     if (renderer.autoClear === false) renderer.clear();
     renderer.render(scene, virtualCamera);

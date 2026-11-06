@@ -327,6 +327,11 @@ export class Stream extends Feature {
     return [{ parent: this.rockery, local: new THREE.Vector3(position.x, top, position.z), kind: 'rock' }];
   }
 
+  // The foam blobs bob and swell; everything else (rockery, banks, stones) stays put.
+  mergeStatic() {
+    super.mergeStatic({ skip: this.foam.map((f) => f.mesh) });
+  }
+
   update(dt, t) {
     this.uniforms.uTime.value = t;
     this.uniforms.uDay.value = 1 - 0.75 * env.nightMix;

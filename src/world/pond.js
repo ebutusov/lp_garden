@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { M, mat } from '../core/materials.js';
 import { WATER_LEVEL, waterSurface } from '../core/layout.js';
+import { UNDERWATER_LAYER } from '../core/camera.js';
 import { Feature } from './feature.js';
 import { makeWaterMaterial, makeWaterGeometry, addMirror } from './water.js';
 
@@ -29,15 +30,18 @@ export class Pond extends Feature {
 
     // inner wall of the pond, so the hole doesn't look into the void. An open-ended
     // cylinder (no caps) drawn BackSide: from inside the pond you see its inner face.
-    this.mesh(
+    const wall = this.mesh(
       new THREE.CylinderGeometry(radius, radius, 0.9, 28, 1, true),
       mat(0x55605a, { side: THREE.BackSide, roughness: 0.9 }),
       0, -0.45, 0,
     );
 
     // inner ground of the pond (darker)
-    this.mesh(new THREE.CircleGeometry(radius, 28), mat(0x3b5a52, { roughness: 0.9 }), 0, -0.9, 0)
-      .rotation.x = -Math.PI / 2;
+    const floor = this.mesh(new THREE.CircleGeometry(radius, 28), mat(0x3b5a52, { roughness: 0.9 }), 0, -0.9, 0);
+    floor.rotation.x = -Math.PI / 2;
+    // Both are below the surface, so the reflection would only clip them away.
+    this.hideFromReflection(wall);
+    this.hideFromReflection(floor);
 
     // The water: a wavy, translucent surface with its own shader code (see water.js); the
     // floor and fish show through it. Transparent, so the renderer draws it after the
@@ -45,7 +49,7 @@ export class Pond extends Feature {
     const { material, uniforms } = makeWaterMaterial(radius);
     this.waterUniforms = uniforms;
     this.water = this.mesh(makeWaterGeometry(radius), material, 0, WATER_LEVEL, 0);
-    addMirror(this.water, uniforms);
+    this.renderMirror = addMirror(this.water, uniforms, radius);
 
     // Lily pads. DoubleSide: visible from above and below (from under the water).
     for (let i = 0; i < 7; i++) {
@@ -65,5 +69,18 @@ export class Pond extends Feature {
   update(dt, t) {
     this.water.position.y = waterSurface(t);
     this.waterUniforms.uTime.value = t;
+  }
+
+  // Renders the water's reflection (see addMirror in water.js). main.js calls it every
+  // frame, after all the updates and just before drawing the scene.
+  renderReflection(renderer, scene, camera) {
+    this.renderMirror(renderer, scene, camera);
+  }
+
+  // Keeps something that stays under the surface (and all its parts) out of the
+  // reflection's render: the oblique near plane would clip it away anyway, but only
+  // after it had been drawn. See UNDERWATER_LAYER in camera.js.
+  hideFromReflection(object) {
+    object.traverse((o) => o.layers.set(UNDERWATER_LAYER));
   }
 }
