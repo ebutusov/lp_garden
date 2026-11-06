@@ -77,6 +77,11 @@ export class ShishiOdoshi extends Feature {
   // ---- Shishi-odoshi cycle: fill → tip → pour → swing back → knock ----
   // A finite state machine: the object is always in exactly one named state, each state
   // has its own behaviour, and a timer or event moves it on to the next.
+  // The tube rocks on its pivot; the posts and the feed pipe stand still.
+  mergeStatic() {
+    super.mergeStatic({ skip: [this.pivot] });
+  }
+
   update(dt) {
     this.timer += dt;
     if (this.state === 'fill') {

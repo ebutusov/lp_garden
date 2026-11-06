@@ -18,6 +18,10 @@ import { Feature } from '../world/feature.js';
 // of them share ONE geometry; only their transforms differ.
 const blobGeo = new THREE.IcosahedronGeometry(1, 0);
 
+// dropTinyShadows(): parts smaller than this (bounding radius, world units) cast none.
+const TINY_SHADOW_R = 0.06;
+const tmpScale = new THREE.Vector3();
+
 export class Animal extends Feature {
   // `radius` > 0 gives the animal a collision circle `height` tall.
   constructor(ctx, { x = 0, z = 0, radius = 0, height = 0, parent } = {}) {
@@ -37,6 +41,21 @@ export class Animal extends Feature {
     mesh.castShadow = cast;
     parent.add(mesh);
     return mesh;
+  }
+
+  // Shadows from parts smaller than the shadow map can show. The sun's shadow map is
+  // 2048 texels across 160 units (lights.js), about 0.08 units a texel, so an eye or a
+  // whisker darkens a texel or less, inside the shadow its head casts anyway. Each
+  // caster is one more draw call in the shadow pass, so those stop casting. Called once
+  // the garden is built (garden.js); it covers hidden parts too (the Gardener's pouch).
+  dropTinyShadows(minRadius = TINY_SHADOW_R) {
+    this.group.updateWorldMatrix(true, true);
+    this.group.traverse((o) => {
+      if (!o.isMesh || !o.castShadow) return;
+      if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+      const s = o.getWorldScale(tmpScale);
+      if (o.geometry.boundingSphere.radius * Math.max(s.x, s.y, s.z) < minRadius) o.castShadow = false;
+    });
   }
 
   // Places this animal won't go (see groundBlocked in physics.js). Its own collision

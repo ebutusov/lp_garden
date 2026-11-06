@@ -60,6 +60,9 @@ setupKeyboardMouse(garden);
 setupTouch(garden);
 installDebug(garden, ctx);
 
+// animate() updates the world matrices itself, once a frame, before both renders.
+scene.matrixWorldAutoUpdate = false;
+
 // ---- Animation loop ----
 // The "game loop": every frame, advance the simulation by dt, then draw. The browser
 // calls requestAnimationFrame callbacks just before each screen refresh, and pauses
@@ -107,6 +110,13 @@ function animate() {
   updateAudio();
   updateHint();
   drawCompass();
+  // Every object's world matrix (where it is in the world, after all its parents'
+  // moves) is worked out once, here, now that everything has moved. renderer.render()
+  // would otherwise redo it for the whole scene at each call, and there are two: the
+  // reflection's and the main one. (scene.matrixWorldAutoUpdate is off, see below.)
+  scene.updateMatrixWorld();
+  // The pond's reflection is a render of its own, before the main one (water.js says why).
+  pond.renderReflection(renderer, scene, camera);
   // Draw through the post-processing chain rather than renderer.render().
   composer.render();
 }

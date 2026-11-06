@@ -169,6 +169,8 @@ export function installDebug(garden, { physics }) {
     // features are built and call rand(); see garden.js).
     fingerprint() {
       const r = (v) => Math.round(v * 1000) / 1000;
+      // The meshes as built: mergeStatic() adds merged copies alongside them (and hides them).
+      const built = (o) => o.children.filter((c) => !c.userData.merged);
       // The animals' colliders move, and the bowls' and the stream's were added after
       // the layout was fixed; none of them is part of what rand() placed.
       const animalSolids = new Set([dog.solid, gardener.solid, ...cats.list.map((c) => c.solid), ...bowls.solids, ...stream.solids]);
@@ -179,10 +181,10 @@ export function installDebug(garden, { physics }) {
         trees: trees.list.map((tr) => {
           const g = tr.crown.parent;
           return [r(g.position.x), r(g.position.z), r(g.scale.x), r(g.rotation.y),
-            tr.crown.children.map((c) => [r(c.position.x), r(c.position.y), r(c.position.z)])];
+            built(tr.crown).map((c) => [r(c.position.x), r(c.position.y), r(c.position.z)])];
         }),
-        flowers: flowers.group.children.filter((o) => o.material === M.flower).map((o) => [r(o.position.x), r(o.position.z)]),
-        stones: steppingStones.group.children.filter((o) => o.material === M.stone && o.geometry.type === 'CylinderGeometry')
+        flowers: built(flowers.group).filter((o) => o.material === M.flower).map((o) => [r(o.position.x), r(o.position.z)]),
+        stones: built(steppingStones.group).filter((o) => o.material === M.stone && o.geometry.type === 'CylinderGeometry')
           .map((o) => [r(o.position.x), r(o.position.z), r(o.rotation.y), r(o.geometry.parameters.radiusTop)]),
         pads: pond.group.children.filter((o) => o.geometry?.type === 'CircleGeometry' && o.material.side === THREE.DoubleSide)
           .map((o) => [r(o.position.x), r(o.position.z), r(o.rotation.z)]),
