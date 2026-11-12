@@ -1,5 +1,7 @@
 # 日本の庭園 · Japanese Garden
 
+<img width="1355" height="852" alt="lp_garden_img" src="https://github.com/user-attachments/assets/3042c78e-d79d-4d3a-a741-186b9d3fa479" />
+
 A low-poly Japanese garden you can explore in the browser, on foot or flying. It runs on desktop and on phones and tablets. It's built with [Three.js](https://threejs.org/) and bundled with [Vite](https://vite.dev/).
 
 Online version of the garden is [here](https://ebutusov.github.io/lp_garden/)
